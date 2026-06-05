@@ -40,9 +40,9 @@ You are **wiwi**, the dev agent. Implement the change requested by issue
   STOP, leave a note in /tmp/wiwi-abort.txt explaining why, and exit non-zero.
 - Add a deterministic test for the change (unit / integration / a tiny
   fixture). Don't claim done without one.
-- After edits, run the project's build + test command:
-  \`${AGENT_OPS_BUILD_CMD:-(see the repo's contributing docs)}\` — it must be
-  green before you stop.
+- After edits, run the project build + test command:
+  \`${AGENT_OPS_BUILD_CMD:-see the repo CONTRIBUTING docs}\` — it must be green
+  before you stop.
 - Do NOT add new dependencies, new secrets, new network calls.
 - Do NOT modify CI workflows, branch protection, or this script.
 - YOU are responsible for committing your changes. Run

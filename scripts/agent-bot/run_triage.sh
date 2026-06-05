@@ -69,6 +69,7 @@ FOOT
 # Sourced by tests with TRIAGE_LIB_ONLY=1: load the helpers above and stop
 # before the live triage flow (which needs gh / claude / the network).
 if [ "${TRIAGE_LIB_ONLY:-}" = "1" ]; then
+  # shellcheck disable=SC2317  # reached only when this file is *executed*, not sourced
   return 0 2>/dev/null || exit 0
 fi
 
@@ -300,7 +301,7 @@ case "$VERDICT" in
       echo "warning: AGENT_GH_TOKEN unset; labeling under GITHUB_TOKEN — ${AGENT_OPS_DEV_AGENT_NAME} will NOT auto-start" >&2
       gh issue edit "$ISSUE_NUMBER" --add-label "$AGENT_OPS_LABEL_TRY"
     fi
-    compose_comment_body "$REPLY" do 0 > "$TMP_BODY"
+    compose_comment_body "$REPLY" "do" 0 > "$TMP_BODY"
     gh issue comment "$ISSUE_NUMBER" --body-file "$TMP_BODY"
     ;;
   needs_info|skip)

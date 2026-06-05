@@ -1,0 +1,4 @@
+# SC1091: "Not following: <dynamically-pathed source>" — the agent scripts
+# source siblings via "$(dirname "${BASH_SOURCE[0]}")/../lib/..." which
+# shellcheck can't resolve statically. The targets are checked on their own.
+disable=SC1091

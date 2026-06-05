@@ -73,7 +73,7 @@ out in the current working tree. Address the review here. Constraints:
 ${REVIEW_BODY}
 
 === inline review comments ===
-${INLINE:-(none)}
+${INLINE:-none}
 
 === PR diff under review (truncated) ===
 ${DIFF}
