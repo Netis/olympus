@@ -82,6 +82,8 @@ is_allowed_ip() {
 is_allowed_home_path_file() {
   local file="$1" pattern
   for pattern in "${HOME_PATH_ALLOWLIST[@]}"; do
+    # $pattern is an allowlist GLOB matched against $file — intentionally unquoted.
+    # shellcheck disable=SC2254
     case "$file" in
       $pattern) return 0 ;;
     esac

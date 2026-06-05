@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Shared helper: poll LiteLLM until it answers /v1/models with the
 # configured API key, with exponential backoff. Source from any
 # agent script that's about to invoke `claude --print` (or any
