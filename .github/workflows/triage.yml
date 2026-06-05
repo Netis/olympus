@@ -1,0 +1,97 @@
+name: agent-ops-triage
+
+# Reusable triage workflow. A consumer repo calls it from a thin wrapper that
+# triggers on issues (see examples/consumer/.github/workflows/triage.yml):
+#
+#   jobs:
+#     triage:
+#       uses: Netis/agent-ops/.github/workflows/triage.yml@v0.1.0
+#       permissions: { contents: read, issues: write }
+#       with:
+#         runner_labels: '["self-hosted","my-runner"]'
+#       secrets: inherit
+#
+# It investigates the issue, then posts a warm maintainer-voice reply and (on a
+# clean 5-gate pass) labels it for the dev agent. All repo-specific behavior —
+# gate thresholds, label names, language — comes from the consumer's
+# .agent-ops.json; nothing here is hardcoded to any one project.
+
+on:
+  workflow_call:
+    inputs:
+      agent_ops_ref:
+        description: Tag/branch of Netis/agent-ops whose scripts to run. Pin to the same version as the @ref above.
+        type: string
+        default: main
+      runner_labels:
+        description: JSON array of runner labels. Must reach the model gateway and have claude + jq + python3.
+        type: string
+        default: '["self-hosted"]'
+      config_path:
+        type: string
+        default: .agent-ops.json
+      model:
+        type: string
+        default: claude-3-5-sonnet-20241022
+      timeout_minutes:
+        type: number
+        default: 10
+    secrets:
+      LITELLM_BASE_URL: { required: true }
+      LITELLM_API_KEY:  { required: true }
+      LITELLM_NO_PROXY: { required: false }
+      AGENT_GH_TOKEN:   { required: true }
+
+concurrency:
+  # One triage per issue; do NOT cancel in progress — the agent:try label this
+  # adds re-enters the same group as a skipped run, which must not kill the
+  # still-finishing real run.
+  group: agent-ops-triage-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    if: ${{ github.event.action == 'opened' || (github.event.action == 'labeled' && github.event.label.name == 'agent:assess') }}
+    runs-on: ${{ fromJSON(inputs.runner_labels) }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    env:
+      ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_BASE_URL }}
+      ANTHROPIC_API_KEY:  ${{ secrets.LITELLM_API_KEY }}
+      ANTHROPIC_MODEL:    ${{ inputs.model }}
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    steps:
+      - name: no_proxy for the model gateway
+        run: |
+          {
+            echo "no_proxy=${{ secrets.LITELLM_NO_PROXY }}"
+            echo "NO_PROXY=${{ secrets.LITELLM_NO_PROXY }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Checkout consumer repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Fetch agent-ops scripts
+        uses: actions/checkout@v4
+        with:
+          repository: Netis/agent-ops
+          ref: ${{ inputs.agent_ops_ref }}
+          token: ${{ secrets.AGENT_GH_TOKEN }}
+          path: _agentops
+
+      - name: Triage issue
+        env:
+          AGENT_OPS_CONFIG: ${{ inputs.config_path }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE:  ${{ github.event.issue.title }}
+          ISSUE_BODY:   ${{ github.event.issue.body }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
+          TRIGGER_KIND: ${{ github.event.action == 'opened' && 'opened' || 'assess' }}
+          GH_TOKEN:       ${{ secrets.GITHUB_TOKEN }}
+          AGENT_GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
+        run: bash _agentops/scripts/agent-bot/run_triage.sh
+
+      - name: Cleanup
+        if: always()
+        run: rm -f /tmp/triage-*.log || true

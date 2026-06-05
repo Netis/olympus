@@ -1,0 +1,92 @@
+name: agent-ops-revise
+
+# Reusable revision workflow. Dispatched (by the review workflow's
+# revise_dispatch step) when the review bot requests changes on an auto-agent
+# PR. The consumer hosts a thin wrapper named `pr-revise.yml` so the dispatch
+# target resolves (override via the AGENT_OPS_REVISE_WORKFLOW env if you name it
+# differently):
+#
+#   name: pr-revise
+#   on: { workflow_dispatch: { inputs: { pr_number: { required: true } } } }
+#   jobs:
+#     revise:
+#       uses: Netis/agent-ops/.github/workflows/revise.yml@v0.1.0
+#       permissions: { contents: write, pull-requests: write }
+#       with:
+#         pr_number: ${{ inputs.pr_number }}
+#         runner_labels: '["self-hosted","my-runner"]'
+#       secrets: inherit
+
+on:
+  workflow_call:
+    inputs:
+      pr_number:
+        type: string
+        required: true
+      agent_ops_ref:
+        type: string
+        default: main
+      runner_labels:
+        type: string
+        default: '["self-hosted"]'
+      config_path:
+        type: string
+        default: .agent-ops.json
+      model:
+        type: string
+        default: claude-3-5-sonnet-20241022
+      timeout_minutes:
+        type: number
+        default: 120
+    secrets:
+      LITELLM_BASE_URL: { required: true }
+      LITELLM_API_KEY:  { required: true }
+      LITELLM_NO_PROXY: { required: false }
+      AGENT_GH_TOKEN:   { required: true }
+
+concurrency:
+  group: agent-ops-revise-${{ inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  revise:
+    runs-on: ${{ fromJSON(inputs.runner_labels) }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    env:
+      ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_BASE_URL }}
+      ANTHROPIC_API_KEY:  ${{ secrets.LITELLM_API_KEY }}
+      ANTHROPIC_MODEL:    ${{ inputs.model }}
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    steps:
+      - name: no_proxy for the model gateway
+        run: |
+          {
+            echo "no_proxy=${{ secrets.LITELLM_NO_PROXY }}"
+            echo "NO_PROXY=${{ secrets.LITELLM_NO_PROXY }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Checkout consumer repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.AGENT_GH_TOKEN }}
+
+      - name: Check out the PR head branch
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
+        run: gh pr checkout "${{ inputs.pr_number }}"
+
+      - name: Fetch agent-ops scripts
+        uses: actions/checkout@v4
+        with:
+          repository: Netis/agent-ops
+          ref: ${{ inputs.agent_ops_ref }}
+          token: ${{ secrets.AGENT_GH_TOKEN }}
+          path: _agentops
+
+      - name: Revise
+        env:
+          AGENT_OPS_CONFIG: ${{ inputs.config_path }}
+          PR_NUMBER: ${{ inputs.pr_number }}
+          GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
+        run: bash _agentops/scripts/agent-bot/run_revise.sh

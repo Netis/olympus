@@ -1,0 +1,26 @@
+name: observe
+# Polls the deployed service every 5 min; files a deduplicated incident issue
+# on a sustained failure. Prefer the systemd-timer path (scripts/agent-bot/
+# mara.service/.timer on a host isolated from prod) if you want the observer to
+# survive an outage that also takes down this runner.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        type: boolean
+        default: false
+
+permissions:
+  issues: write
+
+jobs:
+  observe:
+    uses: Netis/agent-ops/.github/workflows/observe.yml@v0.1.0
+    with:
+      agent_ops_ref: v0.1.0
+      runner_labels: '["self-hosted","my-runner"]'
+      dry_run: ${{ github.event.inputs.dry_run == 'true' }}
+    secrets: inherit

@@ -1,0 +1,29 @@
+name: pr-review
+# Reviews a PR after the consumer's own `ci` workflow succeeds on it.
+# Requires a workflow named `ci` in this repo (the review fires off its
+# completion). Adjust `workflows: [ci]` if yours is named differently.
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR number to review
+        required: true
+        type: number
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: read
+
+jobs:
+  review:
+    uses: Netis/agent-ops/.github/workflows/review.yml@v0.1.0
+    with:
+      agent_ops_ref: v0.1.0
+      runner_labels: '["self-hosted","my-runner"]'
+    secrets: inherit

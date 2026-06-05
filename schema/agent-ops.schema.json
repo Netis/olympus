@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/Netis/agent-ops/main/schema/agent-ops.schema.json",
+  "title": "agent-ops consumer config (.agent-ops.json)",
+  "description": "Per-repo policy for the agent-ops mechanism. Every field is optional; omitted values fall back to a built-in default. This file is the ONLY place a consuming repo expresses repo-specific behavior — the agent-ops scripts and workflows carry none.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "$schema": { "type": "string" },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "description": "Human-readable project name." },
+        "default_branch": { "type": "string", "default": "main", "description": "Branch the dev agent forks from and PRs target." }
+      }
+    },
+    "agents": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "review_bot_login": { "type": "string", "default": "vivi", "description": "GitHub login (or body-footer marker) of the review bot. Auto-merge / revise key off this to find its review." },
+        "dev_agent_name": { "type": "string", "default": "the dev agent", "description": "Display name used in commit author + log lines for the implementer." }
+      }
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "assess": { "type": "string", "default": "agent:assess", "description": "Manual re-triage trigger." },
+        "try": { "type": "string", "default": "agent:try", "description": "Triage adds this on verdict=do; starts the dev agent." },
+        "skip": { "type": "string", "default": "agent:skip", "description": "Mutes re-triage." },
+        "auto_agent": { "type": "string", "default": "auto-agent", "description": "Marks dev-agent PRs eligible for the auto-merge / revise gates." }
+      }
+    },
+    "triage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "gates": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_loc": { "type": "integer", "default": 300, "description": "Diff size ceiling for unattended auto-implementation." },
+            "max_files": { "type": "integer", "default": 10 },
+            "contained_areas": { "type": "array", "items": { "type": "string" }, "description": "Areas a change may touch and still be 'contained' (e.g. one package, docs/, one workflow)." },
+            "test_hint": { "type": "string", "description": "What a deterministic test looks like in this repo (e.g. 'cargo test', 'pytest')." }
+          }
+        },
+        "language": { "type": "string", "default": "auto", "description": "Reply language. 'auto' = match the reporter; otherwise a fixed language code/name (e.g. 'en', 'zh')." }
+      }
+    },
+    "implement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build_cmd": { "type": "string", "description": "The build + test command the dev agent must get green before opening a PR (e.g. 'make build && make test')." }
+      }
+    },
+    "observer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "service_name": { "type": "string", "default": "the service", "description": "Name used in incident text." },
+        "health_url": { "type": "string", "description": "Health endpoint mara polls." },
+        "repo": { "type": "string", "description": "owner/name the incident issue is filed on." },
+        "labels": { "type": "string", "default": "incident", "description": "Comma-separated issue labels." },
+        "readiness": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Optional deeper 'is it actually working' check. Omit for DOWN-only detection.",
+          "properties": {
+            "jq": { "type": "string", "description": "jq filter over the health JSON yielding a readiness value." },
+            "expect": { "type": "string", "default": "true", "description": "Value the jq filter must equal; anything else = parked." }
+          }
+        }
+      }
+    },
+    "model": { "type": "string", "default": "claude-3-5-sonnet-20241022", "description": "Model name sent to the LiteLLM-style gateway." }
+  }
+}

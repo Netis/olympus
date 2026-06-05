@@ -1,0 +1,20 @@
+name: implement
+# Starts the dev agent when triage (or a human) adds the `agent:try` label.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  implement:
+    if: ${{ github.event.label.name == 'agent:try' }}
+    uses: Netis/agent-ops/.github/workflows/implement.yml@v0.1.0
+    with:
+      agent_ops_ref: v0.1.0
+      runner_labels: '["self-hosted","my-runner"]'
+    secrets: inherit          # + AUTO_MERGE_TEAM (optional)

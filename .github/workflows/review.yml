@@ -1,0 +1,149 @@
+name: agent-ops-review
+
+# Reusable PR-review workflow (the review bot). Fires after the consumer's CI
+# succeeds on a PR, reviews the diff, posts a structured review, then — for
+# auto-agent PRs only — either admin-merges (on APPROVE + allowlisted author)
+# or dispatches a revision pass (on CHANGES_REQUESTED).
+#
+# Consumer wrapper:
+#   name: pr-review
+#   on:
+#     workflow_run: { workflows: [ci], types: [completed] }
+#     workflow_dispatch: { inputs: { pr_number: { required: true, type: number } } }
+#   jobs:
+#     review:
+#       uses: Netis/agent-ops/.github/workflows/review.yml@v0.1.0
+#       permissions: { contents: write, issues: write, pull-requests: write, statuses: read }
+#       with:
+#         runner_labels: '["self-hosted","my-runner"]'
+#       secrets: inherit
+#
+# The review bot's identity, the auto-agent label, and the default branch all
+# come from the consumer's .agent-ops.json.
+
+on:
+  workflow_call:
+    inputs:
+      agent_ops_ref:
+        type: string
+        default: main
+      runner_labels:
+        type: string
+        default: '["self-hosted"]'
+      config_path:
+        type: string
+        default: .agent-ops.json
+      model:
+        type: string
+        default: claude-3-5-sonnet-20241022
+      timeout_minutes:
+        type: number
+        default: 120
+    secrets:
+      LITELLM_BASE_URL: { required: true }
+      LITELLM_API_KEY:  { required: true }
+      LITELLM_NO_PROXY: { required: false }
+      AGENT_GH_TOKEN:   { required: true }
+      AUTO_MERGE_TEAM:  { required: false }
+
+concurrency:
+  group: agent-ops-review-${{ github.event.workflow_run.pull_requests[0].number || inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'pull_request' &&
+        github.event.workflow_run.pull_requests[0] != null
+      )
+    runs-on: ${{ fromJSON(inputs.runner_labels) }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    env:
+      ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_BASE_URL }}
+      ANTHROPIC_API_KEY:  ${{ secrets.LITELLM_API_KEY }}
+      ANTHROPIC_MODEL:    ${{ inputs.model }}
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+    steps:
+      - name: no_proxy for the model gateway
+        run: |
+          {
+            echo "no_proxy=${{ secrets.LITELLM_NO_PROXY }}"
+            echo "NO_PROXY=${{ secrets.LITELLM_NO_PROXY }}"
+          } >> "$GITHUB_ENV"
+
+      - name: Resolve PR + head SHA
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR_NUMBER="${{ inputs.pr_number }}"
+          else
+            PR_NUMBER="${{ github.event.workflow_run.pull_requests[0].number }}"
+          fi
+          if [ -z "$PR_NUMBER" ] || [ "$PR_NUMBER" = "null" ]; then
+            echo "::error::could not resolve PR number"; exit 1
+          fi
+          eval "$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --json headRefOid,baseRefName \
+            --jq '"HEAD_SHA=\(.headRefOid)\nBASE_REF=\(.baseRefName)"')"
+          { echo "pr_number=$PR_NUMBER"; echo "head_sha=$HEAD_SHA"; echo "base_ref=$BASE_REF"; } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR head (consumer repo)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+          fetch-depth: 0
+
+      - name: Fetch base for diff
+        run: git fetch origin "${{ steps.pr.outputs.base_ref }}" --depth 200
+
+      - name: Fetch agent-ops scripts
+        uses: actions/checkout@v4
+        with:
+          repository: Netis/agent-ops
+          ref: ${{ inputs.agent_ops_ref }}
+          token: ${{ secrets.AGENT_GH_TOKEN }}
+          path: _agentops
+
+      - name: Run review agent
+        id: review
+        env:
+          AGENT_OPS_CONFIG: ${{ inputs.config_path }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+        run: bash _agentops/scripts/pr-review/run_review.sh "$PR_NUMBER"
+
+      - name: Post review
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ADMIN_GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          AGENT_EXIT: ${{ steps.review.outcome }}
+        run: python3 _agentops/scripts/pr-review/post_review.py "$PR_NUMBER"
+
+      - name: Auto-merge if eligible
+        if: ${{ steps.review.outcome == 'success' }}
+        env:
+          AGENT_OPS_CONFIG: ${{ inputs.config_path }}
+          GH_TOKEN:  ${{ secrets.AGENT_GH_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          AUTO_MERGE_TEAM: ${{ secrets.AUTO_MERGE_TEAM }}
+        run: bash _agentops/scripts/agent-bot/auto_merge.sh
+
+      - name: Dispatch revise if changes requested
+        if: ${{ steps.review.outcome == 'success' }}
+        env:
+          AGENT_OPS_CONFIG: ${{ inputs.config_path }}
+          GH_TOKEN:  ${{ secrets.AGENT_GH_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+        run: bash _agentops/scripts/agent-bot/revise_dispatch.sh
+
+      - name: Cleanup
+        if: always()
+        run: rm -f /tmp/pr-review-*.md /tmp/pr-review-*.log || true

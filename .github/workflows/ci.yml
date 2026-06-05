@@ -1,0 +1,38 @@
+name: ci
+
+# agent-ops's own CI — the framework eats its own dog food. Lints the shell,
+# runs the stdlib tests for the triage composer, the mara observer, and the
+# config loader, and runs the leakage gate on this repo itself.
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y shellcheck >/dev/null
+          shellcheck scripts/agent-bot/*.sh scripts/lib/*.sh scripts/lint/*.sh
+
+      - name: bash -n (syntax)
+        run: for f in scripts/agent-bot/*.sh scripts/lib/*.sh scripts/lint/*.sh; do bash -n "$f"; done
+
+      - name: triage composer tests
+        run: python3 scripts/agent-bot/tests/test_triage.py
+
+      - name: mara observer tests
+        run: python3 scripts/agent-bot/tests/test_mara.py
+
+      - name: config loader tests
+        run: python3 scripts/agent-bot/tests/test_config.py
+
+      - name: reviewer post-logic tests
+        run: python3 scripts/pr-review/test_post_review.py
+
+      - name: leakage gate (self)
+        run: bash scripts/lint/check-leakage.sh

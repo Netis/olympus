@@ -1,0 +1,40 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Netis/agent-ops/main/schema/agent-ops.schema.json",
+  "project": {
+    "name": "my-service",
+    "default_branch": "main"
+  },
+  "agents": {
+    "review_bot_login": "vivi",
+    "dev_agent_name": "wiwi"
+  },
+  "labels": {
+    "assess": "agent:assess",
+    "try": "agent:try",
+    "skip": "agent:skip",
+    "auto_agent": "auto-agent"
+  },
+  "triage": {
+    "gates": {
+      "max_loc": 300,
+      "max_files": 10,
+      "contained_areas": ["one package", "docs/", "one workflow"],
+      "test_hint": "a unit / integration test"
+    },
+    "language": "auto"
+  },
+  "implement": {
+    "build_cmd": "make build && make test"
+  },
+  "observer": {
+    "service_name": "my-service",
+    "health_url": "",
+    "repo": "Netis/my-service",
+    "labels": "incident",
+    "readiness": {
+      "jq": ".status",
+      "expect": "ok"
+    }
+  },
+  "model": "claude-3-5-sonnet-20241022"
+}
