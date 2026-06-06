@@ -79,7 +79,11 @@ which bot, which branch, which build command) is already config-driven.
    model gateway and has `claude`, `jq`, `python3`; org/repo secrets
    `LITELLM_BASE_URL`, `LITELLM_API_KEY`, `LITELLM_NO_PROXY` (optional),
    `AGENT_GH_TOKEN` (a PAT — see [docs/prerequisites.md](docs/prerequisites.md)
-   for the *why*), and optionally `AUTO_MERGE_TEAM`.
+   for the *why*), and optionally `AUTO_MERGE_TEAM`. **Need that runner?** The
+   [cookbooks](docs/cookbooks/) have copy-paste recipes for
+   [self-hosting](docs/cookbooks/self-hosting.md),
+   [DigitalOcean](docs/cookbooks/digitalocean.md), and
+   [AWS](docs/cookbooks/aws.md). (The **guard** gate needs no runner at all.)
 2. **Drop in `.agent-ops.json`** — copy [`examples/consumer/.agent-ops.json`](examples/consumer/.agent-ops.json)
    and edit the gates / build command / labels / observer for your repo. Every
    field is optional ([schema](schema/agent-ops.schema.json)).
