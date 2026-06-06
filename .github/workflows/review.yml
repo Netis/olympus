@@ -39,6 +39,16 @@ on:
       timeout_minutes:
         type: number
         default: 120
+      pr_number:
+        # Only used on the workflow_dispatch (manual re-review) path; the
+        # workflow_run path resolves the PR from github.event.workflow_run.
+        # Declared so the consumer wrapper can pass it through (the concurrency
+        # group + resolve step both reference inputs.pr_number). type: string
+        # (NOT number) so the wrapper can pass an empty `${{ inputs.pr_number }}`
+        # on the workflow_run path without a number-coercion error; the resolve
+        # step uses it only when github.event_name == workflow_dispatch.
+        type: string
+        required: false
     secrets:
       LITELLM_BASE_URL: { required: true }
       LITELLM_API_KEY:  { required: true }
