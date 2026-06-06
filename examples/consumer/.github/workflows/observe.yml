@@ -18,9 +18,9 @@ permissions:
 
 jobs:
   observe:
-    uses: Netis/agent-ops/.github/workflows/observe.yml@v0.1.0
+    uses: Netis/agent-ops/.github/workflows/observe.yml@v0.2.0
     with:
-      agent_ops_ref: v0.1.0
+      agent_ops_ref: v0.2.0
       runner_labels: '["self-hosted","my-runner"]'
       dry_run: ${{ github.event.inputs.dry_run == 'true' }}
     secrets: inherit
