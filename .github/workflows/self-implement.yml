@@ -1,0 +1,22 @@
+name: self-implement
+
+# agent-ops dogfooding its OWN implement surface (wiwi) on its OWN issues, via
+# a local reusable-workflow ref. DORMANT until `SELF_DOGFOOD_ENABLED == 'true'`
+# AND secrets + a self-hosted runner are provisioned (see SELF-DOGFOOD.md).
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  implement:
+    if: ${{ vars.SELF_DOGFOOD_ENABLED == 'true' && github.event.label.name == 'agent:try' }}
+    uses: ./.github/workflows/implement.yml
+    with:
+      runner_labels: '["self-hosted","agent-ops"]'
+    secrets: inherit

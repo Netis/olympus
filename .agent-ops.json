@@ -1,0 +1,36 @@
+{
+  "$schema": "./schema/agent-ops.schema.json",
+  "project": {
+    "name": "agent-ops",
+    "default_branch": "main"
+  },
+  "agents": {
+    "review_bot_login": "vivi",
+    "dev_agent_name": "wiwi"
+  },
+  "labels": {
+    "assess": "agent:assess",
+    "try": "agent:try",
+    "skip": "agent:skip",
+    "auto_agent": "auto-agent"
+  },
+  "triage": {
+    "gates": {
+      "max_loc": 200,
+      "max_files": 8,
+      "contained_areas": ["scripts/", "one reusable workflow", "docs/"],
+      "test_hint": "shellcheck (severity warning) + the stdlib python tests under scripts/**/tests and scripts/pr-review"
+    },
+    "language": "auto"
+  },
+  "implement": {
+    "build_cmd": "shellcheck --severity=warning scripts/agent-bot/*.sh scripts/lib/*.sh scripts/lint/*.sh scripts/pr-review/*.sh && python3 scripts/agent-bot/tests/test_triage.py && python3 scripts/agent-bot/tests/test_mara.py && python3 scripts/agent-bot/tests/test_config.py && python3 scripts/pr-review/test_post_review.py"
+  },
+  "observer": {
+    "service_name": "agent-ops",
+    "health_url": "",
+    "repo": "Netis/agent-ops",
+    "labels": "mara,incident"
+  },
+  "model": "claude-3-5-sonnet-20241022"
+}

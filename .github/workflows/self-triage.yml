@@ -1,0 +1,27 @@
+name: self-triage
+
+# agent-ops dogfooding its OWN triage surface on its OWN issues, via a local
+# reusable-workflow ref (`uses: ./...`) so it always runs the current branch's
+# triage.yml + scripts.
+#
+# DORMANT by default: the job is gated on the repo variable
+# `SELF_DOGFOOD_ENABLED == 'true'`. Until you set that variable AND provision
+# the secrets + a self-hosted runner (see SELF-DOGFOOD.md), this workflow fires
+# on every issue but the job is SKIPPED (grey check, never a red failure).
+# Flip the variable to activate — no file change needed.
+
+on:
+  issues:
+    types: [opened, labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  triage:
+    if: ${{ vars.SELF_DOGFOOD_ENABLED == 'true' }}
+    uses: ./.github/workflows/triage.yml
+    with:
+      runner_labels: '["self-hosted","agent-ops"]'
+    secrets: inherit
