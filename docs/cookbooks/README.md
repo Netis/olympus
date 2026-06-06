@@ -31,16 +31,62 @@ add the `guard.yml` wrapper. Everything below is for the **agentic** surfaces.
 
 agent-ops's workflows read three secrets to reach the model. The names start
 with `LITELLM_` for historical reasons — **it's just "an Anthropic-compatible
-endpoint."** Two common choices:
+endpoint."** Three common choices:
 
 | Choice | `LITELLM_BASE_URL` | `LITELLM_API_KEY` | model |
 |---|---|---|---|
 | **Anthropic API directly** (simplest) | `https://api.anthropic.com` | your `sk-ant-…` key | a real Claude model id (the workflow default `claude-3-5-sonnet-20241022`, or pass a newer one via the `model` input) |
-| **A gateway you run** (LiteLLM / OpenAI-compatible proxy) | `https://your-gateway/v1` | the gateway's key | whatever name the gateway maps |
+| **OpenAI / Azure OpenAI / any OpenAI-compatible** (gpt-4o, local vLLM, …) | a **gateway** you run, e.g. `http://your-litellm:4000` | the gateway's key | the name the gateway maps to your OpenAI model (see below) |
+| **A gateway you run, generally** (LiteLLM / other proxy) | `https://your-gateway/v1` | the gateway's key | whatever name the gateway maps |
 
 The `claude` CLI on the runner reads `ANTHROPIC_BASE_URL` / `ANTHROPIC_API_KEY`,
 which the workflows set from these secrets. **Pointing straight at the Anthropic
 API is the least moving parts** — start there.
+
+### Using OpenAI (or any non-Anthropic) models
+
+The agent surfaces run **Claude Code (`claude`)**, which speaks the **Anthropic
+Messages API** (`POST /v1/messages`). OpenAI speaks a *different* schema
+(`/v1/chat/completions`), so you **cannot point `LITELLM_BASE_URL` straight at
+`api.openai.com`** — the shapes don't match.
+
+The bridge is a **proxy that exposes an Anthropic-format endpoint and translates
+to OpenAI**. [LiteLLM](https://docs.litellm.ai) is the canonical one. Minimal
+setup:
+
+```yaml
+# litellm-config.yaml — map the model name Claude Code asks for → an OpenAI model
+model_list:
+  - model_name: claude-3-5-sonnet-20241022      # what ANTHROPIC_MODEL sends
+    litellm_params:
+      model: openai/gpt-4o                       # route to OpenAI
+      api_key: os.environ/OPENAI_API_KEY
+  # Azure: model: azure/<deployment>, api_base/api_version/api_key
+  # local/other OpenAI-compatible: model: openai/<name>, api_base: http://…/v1
+```
+
+```bash
+pip install 'litellm[proxy]'
+OPENAI_API_KEY=sk-… litellm --config litellm-config.yaml --port 4000
+# LiteLLM serves the Anthropic-format endpoint at /v1/messages on :4000
+```
+
+Then set the secrets to the **proxy**, not OpenAI directly:
+
+```bash
+gh secret set LITELLM_BASE_URL --repo <OWNER>/<REPO> --body "http://your-litellm:4000"
+gh secret set LITELLM_API_KEY  --repo <OWNER>/<REPO> --body "<your LiteLLM master key>"
+```
+
+Keep `ANTHROPIC_MODEL` (the wrapper `model` input) equal to the `model_name` you
+mapped (`claude-3-5-sonnet-20241022` above), or set both to a name of your
+choosing — it's just the routing key into `model_list`. Run the proxy on the
+runner box (or anywhere both the runner and OpenAI can reach), and verify with
+the official LiteLLM docs since exact flags evolve.
+
+> Same pattern covers **Azure OpenAI**, **Bedrock**, **Gemini**, local **vLLM /
+> Ollama**, etc. — anything LiteLLM can route. Claude Code only ever sees the
+> Anthropic shape; the proxy does the rest.
 
 ---
 
