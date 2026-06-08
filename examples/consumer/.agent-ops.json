@@ -36,5 +36,9 @@
       "expect": "ok"
     }
   },
-  "model": "claude-3-5-sonnet-20241022"
+  "model": "claude-3-5-sonnet-20241022",
+
+  "harness": {
+    "kind": "claude"
+  }
 }

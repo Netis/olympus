@@ -60,7 +60,22 @@ Precedence for any value: an exported **env var** > the **config file** > the
 ## `model`
 | Field | Default | Meaning |
 |---|---|---|
-| `model` | `claude-3-5-sonnet-20241022` | Model name sent to the gateway. |
+| `model` | `claude-3-5-sonnet-20241022` | Model name sent to the gateway. Overridden by `harness.model` if set. |
+
+## `harness`
+Which agent CLI drives the surfaces. **Omit the whole block for the built-in
+`claude` (Claude Code) harness** — that's back-compatible with every existing
+consumer.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `harness.kind` | `claude` | `claude` = built-in Claude Code. `custom` = run `harness.command`. |
+| `harness.command` | — | **custom only.** A shell command template run per agent invocation. Placeholders: `{model}` `{prompt_file}` `{out}` `{tools}` `{write}` `{max_turns}`. e.g. `codex exec --model {model} --full-auto < {prompt_file} > {out}`. |
+| `harness.model` | — | Model id for this harness; overrides `.model`. For `custom`, the `{model}` value. |
+| `harness.health_probe` | `true` | Poll the gateway's OpenAI-compatible `/v1/models` before each run (and to detect mid-run outages). Set `false` if your harness's endpoint isn't OpenAI-compatible. |
+
+See [docs/cookbooks](cookbooks/README.md#swapping-the-agent-cli-harness) for a
+full `custom` (codex) walkthrough + the prompt-shape constraint.
 
 ## Example
 

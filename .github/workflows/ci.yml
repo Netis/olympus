@@ -34,6 +34,9 @@ jobs:
       - name: config loader tests
         run: python3 scripts/agent-bot/tests/test_config.py
 
+      - name: harness adapter tests
+        run: python3 scripts/agent-bot/tests/test_harness.py
+
       - name: reviewer post-logic tests
         run: python3 scripts/pr-review/test_post_review.py
 
