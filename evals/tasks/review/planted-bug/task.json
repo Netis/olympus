@@ -1,0 +1,2 @@
+{ "surface": "review", "profile": "review", "prompt": "prompt.md",
+  "expect": { "must_contain_any": ["hardcod", "secret", "credential", "plaintext", "in code", "in source"] } }

@@ -20,10 +20,10 @@ jobs:
           # Gate at warning+ (errors + warnings — real bugs). info/style nits in
           # the ported heron-origin linters are below threshold; .shellcheckrc
           # additionally silences SC1091 (dynamically-pathed sibling sources).
-          shellcheck --severity=warning scripts/agent-bot/*.sh scripts/lib/*.sh scripts/lint/*.sh
+          shellcheck --severity=warning scripts/agent-bot/*.sh scripts/lib/*.sh scripts/lint/*.sh evals/*.sh
 
       - name: bash -n (syntax)
-        run: for f in scripts/agent-bot/*.sh scripts/lib/*.sh scripts/lint/*.sh; do bash -n "$f"; done
+        run: for f in scripts/agent-bot/*.sh scripts/lib/*.sh scripts/lint/*.sh evals/*.sh; do bash -n "$f"; done
 
       - name: triage composer tests
         run: python3 scripts/agent-bot/tests/test_triage.py
@@ -36,6 +36,9 @@ jobs:
 
       - name: harness adapter tests
         run: python3 scripts/agent-bot/tests/test_harness.py
+
+      - name: eval bench check/score tests
+        run: python3 evals/tests/test_checks.py
 
       - name: reviewer post-logic tests
         run: python3 scripts/pr-review/test_post_review.py
