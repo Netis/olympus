@@ -1,0 +1,2 @@
+{ "surface": "triage", "profile": "investigate", "prompt": "prompt.md",
+  "expect": { "verdict": ["skip", "needs_info"] } }
