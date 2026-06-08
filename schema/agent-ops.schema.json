@@ -76,6 +76,17 @@
         }
       }
     },
-    "model": { "type": "string", "default": "claude-3-5-sonnet-20241022", "description": "Model name sent to the LiteLLM-style gateway." }
+    "model": { "type": "string", "default": "claude-3-5-sonnet-20241022", "description": "Model name sent to the LiteLLM-style gateway." },
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Which agent CLI drives the surfaces. Omit for the built-in claude (Claude Code) harness — that's back-compatible with every existing consumer.",
+      "properties": {
+        "kind": { "type": "string", "enum": ["claude", "custom"], "default": "claude", "description": "claude = built-in Claude Code. custom = run the 'command' template." },
+        "command": { "type": "string", "description": "custom only: a shell command template invoked per agent run. Placeholders: {model} {prompt_file} {out} {tools} {write} {max_turns}. e.g. 'codex exec --model {model} --full-auto < {prompt_file} > {out}'." },
+        "model": { "type": "string", "description": "Model id for this harness; overrides top-level .model. For a custom harness this is the {model} placeholder value." },
+        "health_probe": { "type": "boolean", "default": true, "description": "Poll the gateway's OpenAI-compatible /v1/models before each run (and to detect mid-run outages). Set false for harnesses whose endpoint isn't OpenAI-compatible." }
+      }
+    }
   }
 }

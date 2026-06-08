@@ -90,6 +90,44 @@ the official LiteLLM docs since exact flags evolve.
 
 ---
 
+## Swapping the agent CLI (harness)
+
+The section above changes the **model** behind Claude Code. This changes the
+**agent CLI itself** — run `codex`, `aider`, or any wrapper instead of `claude`.
+Set the `harness` block in `.agent-ops.json`:
+
+```jsonc
+{
+  "harness": {
+    "kind": "custom",
+    "command": "codex exec --model {model} --full-auto < {prompt_file} > {out}",
+    "model": "gpt-5",
+    "health_probe": false
+  }
+}
+```
+
+agent-ops fills the placeholders per run: `{model}` `{prompt_file}` (the agent's
+instructions) `{out}` (where to write the agent's output) `{tools}` (the
+allow-listed tools for that surface) `{write}` (`true` only for the implement
+surface — your harness should refuse edits otherwise) `{max_turns}`. Set
+`health_probe: false` unless your harness talks to an OpenAI-compatible
+`/v1/models` endpoint. The runner must have the CLI installed + its auth in env
+(e.g. `OPENAI_API_KEY` for codex — add it as a repo secret / set it on the box).
+
+Omit the `harness` block entirely to use the built-in **`claude`** harness
+(the default; identical to every existing consumer).
+
+> ⚠️ **Known constraint — prompt shape.** agent-ops's prompts are written for
+> Claude Code's behaviour: **triage** expects the agent to emit a JSON object
+> (`verdict` / `reply` / …) and **review** expects a `### Summary` heading that
+> `post_review.py` parses. A non-claude harness may format its output
+> differently and need prompt tuning to satisfy those parsers — agent-ops does
+> **not** normalise output across harnesses. **Qualify a candidate CLI with the
+> `evals/` bench (the harness qualification suite) before wiring it into the live loop.**
+
+---
+
 ## Sizing
 
 | Workload | Suggested box |

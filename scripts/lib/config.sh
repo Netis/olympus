@@ -69,8 +69,20 @@ agent_ops_load_config() {
   # --- implement (dev agent) ---
   export AGENT_OPS_BUILD_CMD="$(_aoc_get '.implement.build_cmd' '' AGENT_OPS_BUILD_CMD)"
 
-  # --- model ---
-  export ANTHROPIC_MODEL="$(_aoc_get '.model' "${ANTHROPIC_MODEL:-claude-3-5-sonnet-20241022}" ANTHROPIC_MODEL)"
+  # --- model (harness.model wins over top-level .model) ---
+  export ANTHROPIC_MODEL="$(_aoc_get '(.harness.model // .model)' "${ANTHROPIC_MODEL:-claude-3-5-sonnet-20241022}" ANTHROPIC_MODEL)"
+
+  # --- harness (which agent CLI drives the surfaces; default claude) ---
+  # Read by scripts/lib/agent-harness.sh's agent_run. kind=custom runs the
+  # command template AGENT_OPS_HARNESS_CMD ({model}/{prompt_file}/{out}/{tools}/
+  # {write}/{max_turns} placeholders). health_probe=false skips the gateway
+  # /v1/models wait (for harnesses whose endpoint isn't OpenAI-compatible).
+  export AGENT_OPS_HARNESS="$(_aoc_get '.harness.kind' 'claude' AGENT_OPS_HARNESS)"
+  export AGENT_OPS_HARNESS_CMD="$(_aoc_get '.harness.command' '' AGENT_OPS_HARNESS_CMD)"
+  # jq's `// empty` (in _aoc_get) treats boolean false as empty, so a literal
+  # `health_probe: false` would be lost — normalise to the string "false"/"true"
+  # inside the filter so only an explicit false disables the probe.
+  export AGENT_OPS_HEALTH_PROBE="$(_aoc_get '(.harness.health_probe | if . == false then "false" else "true" end)' 'true' AGENT_OPS_HEALTH_PROBE)"
 
   # --- observer (mara): map .observer.* onto the MARA_* env mara.sh reads,
   #     unless the env already carries them (workflow/unit override wins). ---

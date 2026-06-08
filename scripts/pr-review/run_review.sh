@@ -15,6 +15,12 @@ set -euo pipefail
 PR_NUMBER="${1:?usage: $0 <pr_number>}"
 WORKDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Load .agent-ops.json so the configured harness (harness.kind) + model land in
+# the env before the agent runs. No config ⇒ claude (back-compatible).
+# shellcheck source=../lib/config.sh
+source "$(cd "$WORKDIR/../lib" && pwd)/config.sh"
+agent_ops_load_config
+
 OUT="/tmp/pr-review-${PR_NUMBER}-out.md"
 LOG="/tmp/pr-review-${PR_NUMBER}-agent.log"
 PROMPT="/tmp/pr-review-${PR_NUMBER}-prompt.md"
@@ -29,19 +35,11 @@ BASE_REF="$(gh pr view "$PR_NUMBER" --json baseRefName --jq .baseRefName)"
 export PR_NUMBER HEAD_SHA BASE_REF
 envsubst < "$WORKDIR/prompt.md" > "$PROMPT"
 
-# Pre-flight: wait until LiteLLM is reachable AND our API key is
-# accepted. The wait covers the common case where model backend / LiteLLM
-# is restarting when this workflow fires; if it's still down after
-# 30 min (MAX_LITELLM_WAIT_SECONDS) the function returns 2 and we
-# pass through with the same diagnostic shape as before. Shared
-# helper in scripts/lib/litellm-wait.sh.
-LITELLM_WAIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/litellm-wait.sh"
-# shellcheck source=../lib/litellm-wait.sh
-source "$LITELLM_WAIT"
-if ! wait_for_litellm; then
-  echo "ERROR: agent unavailable (pre-flight)" > "$OUT"
-  exit 2
-fi
+# Source the harness adapter — it sources litellm-wait.sh and owns the gateway
+# pre-flight wait + the retry-on-gateway-down loop. The CLI is the consumer's
+# .agent-ops.json harness.kind (default: claude).
+# shellcheck source=../lib/agent-harness.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/agent-harness.sh"
 
 # Build the tool allowlist as a single comma-separated string (the
 # format `claude --allowed-tools` accepts).
@@ -49,57 +47,17 @@ ALLOWED_TOOLS="$(grep -v '^#' "$WORKDIR/allowed_tools.txt" \
   | grep -v '^[[:space:]]*$' \
   | paste -sd, -)"
 
-# Headless agent run. The 7200 s outer cap is a hard fence — if the
-# model loops we'd rather post a "review timed out" than wedge the
-# workflow. 7200 s lets large-diff reviews (200+ files, rebrand-class
-# refactors) complete instead of timing out mid-read.
-#
-# Feed the prompt over stdin instead of as a trailing positional arg —
-# `--allowed-tools` is variadic (<tools...>), so a positional prompt
-# right after it gets consumed as an extra tool name and claude then
-# errors with "Input must be provided either through stdin or as a
-# prompt argument when using --print".
-#
-# Retry on transient LiteLLM mid-stream failures: if claude exits
-# non-zero AND the backend looks down right now (5xx / connect-
-# refused / timeout — NOT 4xx), wait for LiteLLM and re-run. Review
-# is idempotent (the OUT file just gets overwritten); restart from
-# scratch is safe. Up to CLAUDE_RETRY_MAX retries (default 2).
-CLAUDE_RETRY_MAX="${CLAUDE_RETRY_MAX:-2}"
-attempt=0
+# Headless agent run via the configured harness (default: claude). The 7200 s
+# outer timeout is a hard fence — large-diff reviews (200+ files) can run long,
+# but we'd rather post "review timed out" than wedge the workflow. agent-harness.sh
+# owns the gateway wait + retry-on-gateway-down loop; review is idempotent ($OUT is
+# overwritten) so a from-scratch retry is safe. The prompt is fed on stdin because
+# claude's --allowed-tools is variadic (a positional prompt would be swallowed as a
+# tool name).
 claude_rc=0
-while true; do
-    set +e
-    timeout 7200 claude \
-      --print \
-      --model "${ANTHROPIC_MODEL:-claude-3-5-sonnet-20241022}" \
-      --max-turns 60 \
-      --output-format text \
-      --permission-mode acceptEdits \
-      --allowed-tools "$ALLOWED_TOOLS" \
-      < "$PROMPT" \
-      > "$OUT" \
-      2> "$LOG"
-    claude_rc=$?
-    set -e
-
-    [ "$claude_rc" -eq 0 ] && break
-
-    if ! litellm_appears_down; then
-        # LiteLLM is up — failure is real (timeout, claude crash,
-        # rate limit, etc). Don't retry.
-        break
-    fi
-
-    if [ "$attempt" -ge "$CLAUDE_RETRY_MAX" ]; then
-        echo "::error::vivi claude died $((attempt+1)) times with LiteLLM down; giving up" >&2
-        break
-    fi
-
-    attempt=$((attempt + 1))
-    echo "::warning::vivi claude exited $claude_rc, LiteLLM down; waiting + retrying (attempt $((attempt+1))/$((CLAUDE_RETRY_MAX+1)))" >&2
-    wait_for_litellm || break
-done
+agent_run --profile review --prompt "$PROMPT" --out "$OUT" --errlog "$LOG" \
+  --tools "$ALLOWED_TOOLS" --max-turns 60 --timeout 7200 \
+  --output-format text --permission-mode acceptEdits --label vivi || claude_rc=$?
 
 if [ "$claude_rc" -ne 0 ]; then
     echo "ERROR: agent exited with code $claude_rc" >> "$LOG"

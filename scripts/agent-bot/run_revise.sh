@@ -79,37 +79,14 @@ ${INLINE:-none}
 ${DIFF}
 EOF
 
-# Wait for the model gateway before launching claude — a transient backend
-# restart during the runner queue wait would otherwise kill the run.
-LITELLM_WAIT="$(cd "$HERE/../lib" && pwd)/litellm-wait.sh"
-# shellcheck source=../lib/litellm-wait.sh
-source "$LITELLM_WAIT"
-wait_for_litellm || exit $?
-
-# Stream claude to both the workflow log and a file; retry on transient
-# backend-down failures (same policy as run_wiwi.sh).
-CLAUDE_RETRY_MAX="${CLAUDE_RETRY_MAX:-2}"
-attempt=0
+# Run the configured agent harness (default: claude) on the revise prompt,
+# streaming to both the workflow log and a file. agent-harness.sh owns the
+# gateway pre-flight wait + retry-on-gateway-down loop (same policy as run_wiwi.sh);
+# which CLI runs is .agent-ops.json's harness.kind.
+# shellcheck source=../lib/agent-harness.sh
+source "$(cd "$HERE/../lib" && pwd)/agent-harness.sh"
 claude_exit=0
-while true; do
-    set +e
-    stdbuf -oL claude --print \
-      --allowed-tools Bash Read Write Edit Grep Glob \
-      --model "${ANTHROPIC_MODEL:-claude-3-5-sonnet-20241022}" \
-      < "$PROMPT" 2>&1 | stdbuf -oL tee /tmp/wiwi-revise-run.log
-    claude_exit=${PIPESTATUS[0]}
-    set -e
-
-    [ "$claude_exit" -eq 0 ] && break
-    if ! litellm_appears_down; then break; fi
-    if [ "$attempt" -ge "$CLAUDE_RETRY_MAX" ]; then
-        echo "::error::wiwi revise: claude died $((attempt+1))× with gateway down; giving up" >&2
-        break
-    fi
-    attempt=$((attempt + 1))
-    echo "::warning::wiwi revise: claude exited $claude_exit, gateway down; waiting + retrying ($((attempt+1))/$((CLAUDE_RETRY_MAX+1)))" >&2
-    wait_for_litellm || break
-done
+agent_run --profile implement --prompt "$PROMPT" --stream /tmp/wiwi-revise-run.log --label "wiwi revise" || claude_exit=$?
 
 if [ "$claude_exit" != "0" ]; then
   echo "wiwi revise failed (claude exit=$claude_exit; see /tmp/wiwi-revise-run.log)" >&2

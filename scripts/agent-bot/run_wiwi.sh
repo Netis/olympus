@@ -75,67 +75,18 @@ the PR body. End it with the literal line:
 Issue title: ${ISSUE_TITLE}
 EOF
 
-# Wait for LiteLLM to be reachable before launching claude. Without
-# this, a transient model backend / LiteLLM restart that happens during the
-# (often-15+ min) self-hosted runner queue wait kills the run
-# immediately and wastes the queue wait + branch-prep work. Caps at
-# 30 min by default; configurable via MAX_LITELLM_WAIT_SECONDS.
-LITELLM_WAIT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/litellm-wait.sh"
-# shellcheck source=../lib/litellm-wait.sh
-source "$LITELLM_WAIT"
-wait_for_litellm || exit $?
-
-# Stream claude's output to BOTH the workflow log (stdout) and a
-# preserved file. Previously this was `> /tmp/wiwi-run.log 2>&1`,
-# which silenced the GH Actions log entirely for the run — you
-# couldn't tell from outside whether wiwi was making progress,
-# looping, or hung. Streaming is essential when the run can take an
-# hour: a developer watching `gh run watch` should see each tool
-# call land in near-real-time.
-#
-# `stdbuf -oL` forces line-buffered stdout from claude and tee
-# (otherwise the 4KB pipe buffer can hide progress for minutes when
-# claude emits small lines slowly).
-#
-# `tee` always exits 0, so we briefly drop `set -e` and capture
-# claude's actual exit via `${PIPESTATUS[0]}`.
-#
-# Retry on transient LiteLLM mid-stream failures: if claude exits
-# non-zero AND the backend now looks down (5xx / connect-refused /
-# timeout — not 4xx, which means LiteLLM is choosing to reject and
-# waiting won't help), wait for LiteLLM to come back and re-run
-# claude from scratch. The prompt above tells claude how to resume
-# from the partial state on disk. Up to CLAUDE_RETRY_MAX retries
-# (default 2 → 3 attempts total).
-CLAUDE_RETRY_MAX="${CLAUDE_RETRY_MAX:-2}"
-attempt=0
+# Run the configured agent harness (default: claude) on the implement prompt,
+# STREAMING its output to BOTH the workflow log (stdout) and /tmp/wiwi-run.log —
+# so a developer watching `gh run watch` sees each tool call land in near
+# real-time (a silent `> log 2>&1` once hid whether wiwi was progressing or
+# hung). agent-harness.sh sources litellm-wait.sh and owns the gateway pre-flight
+# wait + retry-on-gateway-down loop (it re-runs from scratch; the prompt above
+# tells the agent how to resume from the partial on-disk state). Which CLI runs
+# is .agent-ops.json's harness.kind.
+# shellcheck source=../lib/agent-harness.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/agent-harness.sh"
 claude_exit=0
-while true; do
-    set +e
-    stdbuf -oL claude --print \
-      --allowed-tools Bash Read Write Edit Grep Glob \
-      --model "${ANTHROPIC_MODEL:-claude-3-5-sonnet-20241022}" \
-      < "$PROMPT" 2>&1 | stdbuf -oL tee /tmp/wiwi-run.log
-    claude_exit=${PIPESTATUS[0]}
-    set -e
-
-    [ "$claude_exit" -eq 0 ] && break
-
-    if ! litellm_appears_down; then
-        # LiteLLM is up — failure is something else (claude
-        # internal error, prompt issue, token budget). Don't retry.
-        break
-    fi
-
-    if [ "$attempt" -ge "$CLAUDE_RETRY_MAX" ]; then
-        echo "::error::wiwi claude died $((attempt+1)) times with LiteLLM down; giving up" >&2
-        break
-    fi
-
-    attempt=$((attempt + 1))
-    echo "::warning::wiwi claude exited $claude_exit, LiteLLM down; waiting + retrying (attempt $((attempt+1))/$((CLAUDE_RETRY_MAX+1)))" >&2
-    wait_for_litellm || break
-done
+agent_run --profile implement --prompt "$PROMPT" --stream /tmp/wiwi-run.log --label wiwi || claude_exit=$?
 
 if [ "$claude_exit" != "0" ]; then
   echo "wiwi run failed (claude exit=$claude_exit; see /tmp/wiwi-run.log)" >&2
