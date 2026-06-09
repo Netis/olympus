@@ -35,6 +35,25 @@ BASE_REF="$(gh pr view "$PR_NUMBER" --json baseRefName --jq .baseRefName)"
 export PR_NUMBER HEAD_SHA BASE_REF
 envsubst < "$WORKDIR/prompt.md" > "$PROMPT"
 
+# Pre-fetch the diff and inject it into the prompt. The review must NOT depend
+# on the agent issuing its own `gh pr diff` tool call: some model backends emit
+# tool calls as plain text (`<tool_call>…`) instead of invoking them natively,
+# so the agent never actually receives the diff and produces an empty,
+# heading-less review that falls back to COMMENTED on every PR. Injecting the
+# diff up front makes the review backend-agnostic — the agent can review
+# directly, and Read/Grep stay available for deeper investigation when native
+# tool-calling does work. Appended (not via envsubst) because a diff can contain
+# `${…}` byte sequences envsubst would mangle; capped so a huge PR can't blow
+# the context window (the agent can fetch more itself when tool-calling works).
+{
+  echo
+  echo '## The diff under review (pre-fetched — review this directly)'
+  echo
+  echo '```diff'
+  gh pr diff "$PR_NUMBER" --patch 2>/dev/null | head -c 800000
+  echo '```'
+} >> "$PROMPT"
+
 # Source the harness adapter — it sources litellm-wait.sh and owns the gateway
 # pre-flight wait + the retry-on-gateway-down loop. The CLI is the consumer's
 # .agent-ops.json harness.kind (default: claude).
