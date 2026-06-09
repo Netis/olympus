@@ -71,8 +71,10 @@ When you see code that smells like one of these, call it out as
 
 ## Method — do exactly this, in this order
 
-1. **Get the diff**: `gh pr diff ${PR_NUMBER} --patch`. Skim once
-   for shape (size, languages touched).
+1. **Read the diff** — it is pre-fetched and included at the END of
+   this prompt; no tool call is needed to get it. Skim once for shape
+   (size, languages touched). (If it was truncated for size, fetch the
+   rest yourself with `gh pr diff ${PR_NUMBER} --patch`.)
 
 2. **For each changed file** (cap at 25 if there are more — list the
    skipped in your output):
@@ -149,5 +151,6 @@ explicit recommendation: APPROVE / COMMENT / REQUEST_CHANGES.
 - **Cap your investigation**: ≤ 60 turns. If you hit the cap, dump
   what you have — partial reviews are still useful.
 
-Now start. Your first tool call should be `Bash: gh pr diff
-${PR_NUMBER} --patch`.
+Now start. The full diff is included at the end of this prompt — review
+it directly; use Read / Grep on the changed files for the deeper checks
+above. Your output must begin with `### Summary`.
