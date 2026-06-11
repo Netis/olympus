@@ -45,3 +45,6 @@ jobs:
 
       - name: leakage gate (self)
         run: bash scripts/lint/check-leakage.sh
+
+      - name: legacy-naming regression guard (rename to Olympus stays clean)
+        run: bash scripts/lint/check-legacy-naming.sh
