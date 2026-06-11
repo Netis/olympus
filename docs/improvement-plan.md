@@ -1,7 +1,7 @@
 # Engineering improvement plan
 
 The phased hardening plan behind the [roadmap](roadmap.md)'s Horizon 1. The
-roadmap says *where* agent-ops is going as an open-source product; this
+roadmap says *where* the project (Olympus, once [0.2-0](#02-0--rename-to-olympus--the-zero-consumer-window) lands) is going; this
 document says *what to change in this codebase, in what order, and how we'll
 know each item is done*. Version numbers are phase names, not date promises.
 
@@ -35,17 +35,47 @@ So the phases gate on:
 
 Throughout, the mechanism/policy split stays sacred: every new behavior below
 is a config key with a safe default, resolved through the existing `config.sh`
-precedence (env > `.agent-ops.json` > built-in default), and every agent
+precedence (env > config file > built-in default), and every agent
 invocation keeps going through the `agent_run` adapter.
 
 ## Phase v0.2.x — open-source readiness (blocks any announcement)
 
 | # | Item | Effort |
 |---|---|---|
+| 0.2-0 | Rename to **Olympus** + pantheon agent names | M |
 | 0.2-1 | Untrusted-input containment for the implement agent | L |
 | 0.2-2 | Generalize the review prompt via a context slot | M |
 | 0.2-3 | Purge remaining hardcoded identities and labels | S–M |
-| 0.2-4 | `agent-ops doctor` + config schema validation in `guard.yml` | M |
+| 0.2-4 | `doctor` (Asclepius) + config schema validation in `guard.yml` | M |
+
+### 0.2-0 · Rename to Olympus — the zero-consumer window
+
+The project is renamed **Olympus** and the agents take the deities whose
+domains match their functions — Hermes (triage), Hephaestus
+(implement/revise), Themis (review), Argus (observer), Cerberus (guard),
+Asclepius (doctor), the Labours (evals), Atlas (fleet). The full mapping with
+rationale, the two-layer rename scope (brand vs mechanism), and the
+no-shims argument live in [pantheon.md](pantheon.md).
+
+This goes **first** because the mechanism layer is breaking — repo path in
+consumer `uses:` references, `.agent-ops.json` → `.olympus.json`,
+`AGENT_OPS_*` → `OLYMPUS_*` env prefixes, `MARA_*` → `ARGUS_*` — and the
+consumer count is zero today. Every consumer that onboards before the rename
+(including heron, H1.5) converts part of this list into a migration burden;
+at zero consumers it is one self-contained PR plus a repo-settings change,
+with no compatibility shims to write or later delete.
+
+Sequencing note: 0.2-3 (purging hardcoded identities into config variables)
+is folded into the same change — there is no point parameterizing the string
+"wiwi" and then renaming the default to "hephaestus" in a second pass.
+
+**Why:** a rename after launch breaks pinned consumers and burns the
+project's first impression twice; a rename now is free.
+
+**Acceptance:** see [pantheon.md](pantheon.md) — zero
+`agent-ops`/`wiwi`/`vivi`/`mara` matches in mechanism code, self-CI green,
+`examples/consumer/` references `Netis/olympus` and `.olympus.json`, doctor
+passes against the example.
 
 ### 0.2-1 · Untrusted-input containment — P0 security
 
@@ -56,7 +86,7 @@ radius when that fails:
   in `scripts/lib/agent-harness.sh` with an allowlist assembled from config:
   read/build primitives plus the consumer's declared `build_cmd`, with network
   egress tools (`curl`, `wget`, `nc`, `ssh`) denied by default. New key
-  `.implement.allowed_bash` in `schema/agent-ops.schema.json`, loaded by
+  `.implement.allowed_bash` in `schema/olympus.schema.json`, loaded by
   `scripts/lib/config.sh`. Consumers who genuinely need more opt in
   explicitly — policy in their file, mechanism here.
 - **(b) Fence untrusted content in prompts.** In `run_wiwi.sh`,
@@ -86,7 +116,7 @@ non-allowlisted actor does not trigger implement.
 Split `scripts/pr-review/prompt.md` into a generic reviewer prompt (role,
 verdict format, the genuinely generic leakage/secrets section) with
 `{project_context}` / `{repo_gotchas}` slots, filled from a consumer-supplied
-file (default `.agent-ops/review-context.md`, configurable via a new
+file (default `.olympus/review-context.md`, configurable via a new
 `.review.context_file` key). `run_review.sh` performs the substitution; a
 missing context file degrades to a generic-but-functional review. The current
 heron crate map + gotchas move verbatim into heron's repo as the first
@@ -101,6 +131,9 @@ artifact to ship to strangers.
 
 ### 0.2-3 · Purge remaining hardcoded identities and labels
 
+Lands in the same change as 0.2-0: parameterize the strings, and the new
+defaults are the pantheon names.
+
 - `scripts/pr-review/post_review.py`: the `Reviewed by **vivi**` footer reads
   `AGENT_OPS_REVIEW_BOT_LOGIN` from the environment (already exported by
   `config.sh`; keep footer and `auto_merge.sh`'s review matcher in lockstep).
@@ -109,7 +142,7 @@ artifact to ship to strangers.
   `$AGENT_OPS_DEV_AGENT_NAME` / `$AGENT_OPS_REVIEW_BOT_LOGIN`, as the triage
   replies already do.
 - `.github/workflows/triage.yml` hardcodes the `agent:assess` label in its
-  `if:` condition — workflow expressions can't read `.agent-ops.json`, so
+  `if:` condition — workflow expressions can't read the config file, so
   promote it to a workflow input `assess_label` (default `agent:assess`) that
   consumer wrappers pass; update `examples/consumer/`.
 
@@ -118,14 +151,14 @@ bodies today — config that silently doesn't apply destroys trust in every
 other config key.
 
 **Acceptance:** `grep -rn 'vivi\|wiwi' scripts/ .github/workflows/` matches
-only defaults inside `config.sh`; a `test_post_review.py` case asserts the
-footer uses the env-provided login; triage fires on a custom label in the
-example consumer.
+nothing (the config defaults become `themis`/`hephaestus` per 0.2-0); a
+`test_post_review.py` case asserts the footer uses the env-provided login;
+triage fires on a custom label in the example consumer.
 
-### 0.2-4 · `agent-ops doctor` + schema validation in guard
+### 0.2-4 · `doctor` (Asclepius) + schema validation in guard
 
 Both already on the roadmap — fold security in. `scripts/doctor.sh` validates
-in one command: `.agent-ops.json` against `schema/agent-ops.schema.json` (a
+in one command: `.olympus.json` against `schema/olympus.schema.json` (a
 small stdlib-Python validator, `scripts/lint/check-config.py` — the schema is
 shallow and `jsonschema` isn't stdlib), required labels exist, secrets are
 present, the runner can reach the gateway, and — explicitly — that
@@ -175,10 +208,10 @@ JSON assert escalation, not downgrade.
 
 - **mara:** wrap each invocation in `flock` on a state-dir lockfile, making
   the dedup read-modify-write atomic across overlapping timer fires.
-- **triage comments:** embed a hidden marker (`<!-- agent-ops:triage:v1 -->`)
+- **triage comments:** embed a hidden marker (`<!-- olympus:triage:v1 -->`)
   and skip/update instead of duplicating when re-triggered.
 - **revise round cap:** persist the round count as a hidden marker
-  (`<!-- agent-ops:revise-round:N -->`) in the dispatch comment
+  (`<!-- olympus:revise-round:N -->`) in the dispatch comment
   `revise_dispatch.sh` already posts; the fresh review-history count becomes
   the fallback, not the primary counter.
 
@@ -285,18 +318,19 @@ release/tagging process doc, and completion of the standing dogfood target:
 `review-context.md` from 0.2-2 — which doubles as the proof that the
 generalization was lossless.
 
-**Acceptance:** heron runs the full loop from agent-ops wrappers with zero
+**Acceptance:** heron runs the full loop from Olympus wrappers with zero
 behavior regression; `SECURITY.md` exists before launch.
 
 ## Sequencing summary
 
 | Phase | Theme | Gate it clears |
 |---|---|---|
-| v0.2.x | Injection containment, prompt generalization, identity purge, doctor + schema validation | Safe and credible to announce publicly |
+| v0.2.x | Olympus rename, injection containment, prompt generalization, identity purge, doctor + schema validation | Safe and credible to announce publicly |
 | v0.3 | Traps / locks / retries / guards + JSONL run summaries | Trustworthy unattended; failures debuggable, costs measurable |
 | v0.4 | Test + eval depth, budgets, heartbeat, community docs, heron dogfood | Ready to absorb external contributors and consumers |
 
 Items 0.2-1 and 0.2-2 are the two hard blockers: prompt injection on a public
 issue tracker is an active attack surface the moment the repo is public, and
 the heron-specific review prompt is the first thing an evaluating adopter will
-read.
+read. 0.2-0 precedes them chronologically only because its cost window closes
+with the first consumer.
