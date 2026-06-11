@@ -1,6 +1,6 @@
-# Cookbook: self-hosting the agent-ops runner
+# Cookbook: self-hosting the Olympus runner
 
-Run the agent-ops loop on your own hardware — a spare box, a VM on your
+Run the Olympus loop on your own hardware — a spare box, a VM on your
 hypervisor (libvirt / Proxmox / VMware / Hyper-V), or bare metal. This is the
 cheapest option if you already have capacity, and the only option if your model
 endpoint is on a private network.
@@ -25,7 +25,7 @@ This mirrors how the framework's own reference deployment is built. Create a
 
 ```yaml
 #cloud-config
-hostname: agent-ops-runner
+hostname: olympus-runner
 users:
   - name: runner
     sudo: ALL=(ALL) NOPASSWD:ALL
@@ -40,11 +40,11 @@ packages: [git, jq, python3, curl, ca-certificates]
 ```bash
 cloud-localds seed.iso user-data
 qemu-img create -F qcow2 -b /path/to/noble-server-cloudimg-amd64.img -f qcow2 disk.qcow2 20G
-virt-install --name agent-ops-runner --memory 4096 --vcpus 2 \
+virt-install --name olympus-runner --memory 4096 --vcpus 2 \
   --disk path=disk.qcow2,format=qcow2 --disk path=seed.iso,device=cdrom \
   --os-variant ubuntu24.04 --network network=default \
   --graphics none --import --noautoconsole
-virsh autostart agent-ops-runner   # survive host reboots
+virsh autostart olympus-runner   # survive host reboots
 ```
 
 Proxmox / VMware / Hyper-V: provision an equivalent Ubuntu VM however you
@@ -68,7 +68,7 @@ root.
 ## 3. Bring it online
 
 Continue with **Steps A–D** in [`./README.md`](./README.md): bootstrap the box,
-register the runner (label `self-hosted,agent-ops`), set the secrets, smoke-test.
+register the runner (label `self-hosted,olympus`), set the secrets, smoke-test.
 
 ## Pros / cons
 

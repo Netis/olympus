@@ -1,12 +1,12 @@
 {
-  "$schema": "./schema/agent-ops.schema.json",
+  "$schema": "./schema/olympus.schema.json",
   "project": {
-    "name": "agent-ops",
+    "name": "olympus",
     "default_branch": "main"
   },
   "agents": {
-    "review_bot_login": "vivi",
-    "dev_agent_name": "wiwi"
+    "review_bot_login": "themis",
+    "dev_agent_name": "hephaestus"
   },
   "labels": {
     "assess": "agent:assess",
@@ -24,13 +24,13 @@
     "language": "auto"
   },
   "implement": {
-    "build_cmd": "shellcheck --severity=warning scripts/agent-bot/*.sh scripts/lib/*.sh scripts/lint/*.sh scripts/pr-review/*.sh && python3 scripts/agent-bot/tests/test_triage.py && python3 scripts/agent-bot/tests/test_mara.py && python3 scripts/agent-bot/tests/test_config.py && python3 scripts/pr-review/test_post_review.py"
+    "build_cmd": "shellcheck --severity=warning scripts/agent-bot/*.sh scripts/lib/*.sh scripts/lint/*.sh scripts/pr-review/*.sh && python3 scripts/agent-bot/tests/test_triage.py && python3 scripts/agent-bot/tests/test_argus.py && python3 scripts/agent-bot/tests/test_config.py && python3 scripts/pr-review/test_post_review.py"
   },
   "observer": {
-    "service_name": "agent-ops",
+    "service_name": "olympus",
     "health_url": "",
-    "repo": "Netis/agent-ops",
-    "labels": "mara,incident"
+    "repo": "Netis/olympus",
+    "labels": "argus,incident"
   },
   "model": "claude-3-5-sonnet-20241022"
 }

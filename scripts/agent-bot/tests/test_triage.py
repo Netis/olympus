@@ -56,7 +56,7 @@ def test_do_posts_reply_verbatim_no_robotic_header():
     assert "Gate" not in out and "gate" not in out, out
     # `do` is auto-queued → no maintainer-controls block
     assert "Maintainer controls" not in out, out
-    assert "<!-- agent-ops-triage:do -->" in out, out
+    assert "<!-- olympus-triage:do -->" in out, out
 
 
 def test_needs_info_keeps_reply_and_adds_collapsed_controls():
@@ -65,7 +65,7 @@ def test_needs_info_keeps_reply_and_adds_collapsed_controls():
     assert reply in out, out
     assert "<details><summary>Maintainer controls</summary>" in out, out
     assert "`agent:try`" in out and "`agent:skip`" in out, out
-    assert "<!-- agent-ops-triage:needs_info -->" in out, out
+    assert "<!-- olympus-triage:needs_info -->" in out, out
     # still no robotic framing
     assert "Triage:" not in out, out
 
@@ -75,7 +75,7 @@ def test_skip_is_not_a_brushoff_reply_preserved():
     out = compose(reply, "skip")
     assert reply in out, out
     assert "Maintainer controls" in out, out
-    assert "<!-- agent-ops-triage:skip -->" in out, out
+    assert "<!-- olympus-triage:skip -->" in out, out
 
 
 def test_downgrade_drops_do_reply_for_honest_fallback():
@@ -85,7 +85,7 @@ def test_downgrade_drops_do_reply_for_honest_fallback():
     assert do_reply not in out, "misleading do-reply must be dropped on downgrade\n" + out
     assert "acceptance criteria" in out, out
     assert "Maintainer controls" in out, out
-    assert "<!-- agent-ops-triage:needs_info -->" in out, out
+    assert "<!-- olympus-triage:needs_info -->" in out, out
 
 
 def test_empty_reply_falls_back():
@@ -97,7 +97,7 @@ def test_empty_reply_falls_back():
 def test_marker_tracks_verdict():
     for v in ("do", "needs_info", "skip"):
         out = compose("hi", v)
-        assert f"<!-- agent-ops-triage:{v} -->" in out, (v, out)
+        assert f"<!-- olympus-triage:{v} -->" in out, (v, out)
 
 
 def main():

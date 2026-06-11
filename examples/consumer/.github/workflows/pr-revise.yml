@@ -1,7 +1,7 @@
 name: pr-revise
 # Dispatched by the review workflow when the review bot requests changes on an
 # auto-agent PR. The file MUST be named pr-revise.yml (revise_dispatch.sh
-# dispatches that workflow name) unless you set AGENT_OPS_REVISE_WORKFLOW.
+# dispatches that workflow name) unless you set OLYMPUS_REVISE_WORKFLOW.
 
 on:
   workflow_dispatch:
@@ -17,9 +17,9 @@ permissions:
 
 jobs:
   revise:
-    uses: Netis/agent-ops/.github/workflows/revise.yml@v0.2.0
+    uses: Netis/olympus/.github/workflows/revise.yml@v0.2.0
     with:
       pr_number: ${{ inputs.pr_number }}
-      agent_ops_ref: v0.2.0
+      olympus_ref: v0.2.0
       runner_labels: '["self-hosted","my-runner"]'
     secrets: inherit

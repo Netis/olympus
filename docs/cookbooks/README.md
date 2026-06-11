@@ -1,14 +1,14 @@
-# agent-ops cookbooks
+# Olympus cookbooks
 
 Recipes for standing up the infrastructure a consumer repo needs to run the
-agent-ops loop. Pick a platform:
+Olympus loop. Pick a platform:
 
 - [Self-hosting](./self-hosting.md) — your own box, VM, or hypervisor (libvirt /
   Proxmox / bare metal)
 - [DigitalOcean](./digitalocean.md) — a Droplet
 - [AWS](./aws.md) — an EC2 instance
 
-> New to agent-ops? Read [`../setup.md`](../setup.md) and
+> New to Olympus? Read [`../setup.md`](../setup.md) and
 > [`../prerequisites.md`](../prerequisites.md) first. These cookbooks are the
 > *platform-specific* half of that setup.
 
@@ -19,8 +19,8 @@ agent-ops loop. Pick a platform:
 | Surface | Needs a self-hosted runner? | Why |
 |---|---|---|
 | **guard** (leakage / secret hygiene) | **No** — runs on GitHub-hosted `ubuntu-latest` | Pure linters; only need the repo + the public internet. Free on public repos. |
-| **triage, implement (wiwi), review (vivi), revise** | **Yes** | They run the `claude` CLI against a model endpoint. A GitHub-hosted runner can't reach a private/internal model gateway, and you usually don't want your API key on ephemeral cloud runners. |
-| **observe (mara)** | A small box, **isolated from prod** | A systemd timer; see [`../../SELF-DOGFOOD.md`](../../SELF-DOGFOOD.md) and the observer notes in `setup.md`. |
+| **triage, implement (hephaestus), review (themis), revise** | **Yes** | They run the `claude` CLI against a model endpoint. A GitHub-hosted runner can't reach a private/internal model gateway, and you usually don't want your API key on ephemeral cloud runners. |
+| **observe (argus)** | A small box, **isolated from prod** | A systemd timer; see [`../../SELF-DOGFOOD.md`](../../SELF-DOGFOOD.md) and the observer notes in `setup.md`. |
 
 So: if you only want the **guard** gate, you need **zero infrastructure** — just
 add the `guard.yml` wrapper. Everything below is for the **agentic** surfaces.
@@ -29,7 +29,7 @@ add the `guard.yml` wrapper. Everything below is for the **agentic** surfaces.
 
 ## The model endpoint (decide this first)
 
-agent-ops's workflows read three secrets to reach the model. The names start
+Olympus's workflows read three secrets to reach the model. The names start
 with `LITELLM_` for historical reasons — **it's just "an Anthropic-compatible
 endpoint."** Three common choices:
 
@@ -94,7 +94,7 @@ the official LiteLLM docs since exact flags evolve.
 
 The section above changes the **model** behind Claude Code. This changes the
 **agent CLI itself** — run `codex`, `aider`, or any wrapper instead of `claude`.
-Set the `harness` block in `.agent-ops.json`:
+Set the `harness` block in `.olympus.json`:
 
 ```jsonc
 {
@@ -107,7 +107,7 @@ Set the `harness` block in `.agent-ops.json`:
 }
 ```
 
-agent-ops fills the placeholders per run: `{model}` `{prompt_file}` (the agent's
+Olympus fills the placeholders per run: `{model}` `{prompt_file}` (the agent's
 instructions) `{out}` (where to write the agent's output) `{tools}` (the
 allow-listed tools for that surface) `{write}` (`true` only for the implement
 surface — your harness should refuse edits otherwise) `{max_turns}`. Set
@@ -118,11 +118,11 @@ surface — your harness should refuse edits otherwise) `{max_turns}`. Set
 Omit the `harness` block entirely to use the built-in **`claude`** harness
 (the default; identical to every existing consumer).
 
-> ⚠️ **Known constraint — prompt shape.** agent-ops's prompts are written for
+> ⚠️ **Known constraint — prompt shape.** Olympus's prompts are written for
 > Claude Code's behaviour: **triage** expects the agent to emit a JSON object
 > (`verdict` / `reply` / …) and **review** expects a `### Summary` heading that
 > `post_review.py` parses. A non-claude harness may format its output
-> differently and need prompt tuning to satisfy those parsers — agent-ops does
+> differently and need prompt tuning to satisfy those parsers — Olympus does
 > **not** normalise output across harnesses. **Qualify a candidate CLI with the
 > `evals/` bench (the harness qualification suite) before wiring it into the live loop.**
 
@@ -133,9 +133,9 @@ Omit the `harness` block entirely to use the built-in **`claude`** harness
 | Workload | Suggested box |
 |---|---|
 | triage / review only (read + comment) | 2 vCPU / 4 GB |
-| + implement (wiwi runs your `build_cmd`) | size for **your build** — wiwi needs your project's full toolchain + enough RAM/CPU to compile. A Rust/heavy build often wants 4 vCPU / 8–16 GB. |
+| + implement (hephaestus runs your `build_cmd`) | size for **your build** — hephaestus needs your project's full toolchain + enough RAM/CPU to compile. A Rust/heavy build often wants 4 vCPU / 8–16 GB. |
 
-The runner also needs **whatever `.agent-ops.json` `implement.build_cmd`
+The runner also needs **whatever `.olympus.json` `implement.build_cmd`
 invokes** installed (your compiler, test tooling, etc.) — that's project-specific
 and not covered here.
 
@@ -182,8 +182,8 @@ tar xzf runner.tar.gz
 
 ./config.sh --url https://github.com/<OWNER>/<REPO> \
   --token <REGISTRATION_TOKEN> \
-  --name agent-ops-runner \
-  --labels self-hosted,agent-ops \
+  --name olympus-runner \
+  --labels self-hosted,olympus \
   --unattended --replace
 
 sudo ./svc.sh install "$USER"   # install as a systemd service so it survives reboots
@@ -191,7 +191,7 @@ sudo ./svc.sh start
 ```
 
 > **Label** = whatever you put in your wrapper workflows' `runner_labels`
-> (`'["self-hosted","agent-ops"]'` here). Keep them in sync. You can register one
+> (`'["self-hosted","olympus"]'` here). Keep them in sync. You can register one
 > runner at the **org** level and share it across repos instead of per-repo.
 
 ### C. Secrets + wrappers
@@ -210,7 +210,7 @@ gh secret set LITELLM_NO_PROXY --repo <OWNER>/<REPO> --body "<hosts to bypass a 
 gh secret set AUTO_MERGE_TEAM  --repo <OWNER>/<REPO> --body "alice,bob"   # auto-merge allowlist
 ```
 
-Then add `.agent-ops.json` (see [`../config-reference.md`](../config-reference.md))
+Then add `.olympus.json` (see [`../config-reference.md`](../config-reference.md))
 and the thin wrapper workflows (copy from
 [`../../examples/consumer/`](../../examples/consumer/)), making sure each
 wrapper's `runner_labels` matches your runner's label.
@@ -218,7 +218,7 @@ wrapper's `runner_labels` matches your runner's label.
 ### D. Smoke test
 
 1. Open an issue → the triage workflow runs on your runner and replies.
-2. (implement) add the `agent:try` label → wiwi branches, builds, opens a DRAFT PR.
+2. (implement) add the `agent:try` label → hephaestus branches, builds, opens a DRAFT PR.
 3. Push a PR → after CI, the review workflow posts a review.
 
 If a job sits **queued** forever, the runner isn't online or its label doesn't
@@ -232,7 +232,7 @@ can reach `LITELLM_BASE_URL`.
 - The runner holds your **model API key** and a **GitHub PAT** — treat the box as
   sensitive. Prefer a dedicated box per trust boundary; don't co-host it with
   untrusted workloads.
-- Self-hosted runners on **public** repos can run code from forked PRs. agent-ops's
+- Self-hosted runners on **public** repos can run code from forked PRs. Olympus's
   reusable workflows only act on **same-repo** PRs by design, but review your
   repo's `pull_request` vs `pull_request_target` settings before exposing a runner.
 - Keep the box patched; the runner auto-updates itself, the OS does not.

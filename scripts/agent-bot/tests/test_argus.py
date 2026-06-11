@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Integration test for mara.sh's confirm-debounce (option A) — stdlib only, so
+"""Integration test for argus.sh's confirm-debounce (option A) — stdlib only, so
 CI can run it without installing anything:
 
-    python3 scripts/agent-bot/tests/test_mara.py
+    python3 scripts/agent-bot/tests/test_argus.py
 
 Spins up a stub `/api/health` server whose responses follow a per-test script
 (one entry per request; the last entry repeats once the script is exhausted),
-then runs mara.sh in DRY_RUN with CONFIRM_DELAY=0 and asserts whether it would
+then runs argus.sh in DRY_RUN with CONFIRM_DELAY=0 and asserts whether it would
 file. The point under test: a single failed poll that recovers on a later poll
 (a deploy/restart blip) must NOT open an incident; only an all-polls-failed
 run does.
@@ -22,7 +22,7 @@ import tempfile
 import threading
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-MARA = os.path.join(os.path.dirname(HERE), "mara.sh")
+MARA = os.path.join(os.path.dirname(HERE), "argus.sh")
 
 # Response script the handler walks through. Each entry is one of:
 #   {"code": 503}                      → down (non-200)
@@ -63,24 +63,24 @@ def _set_script(script):
         _reqs[0] = 0
 
 
-def _run_mara(script, **env_over):
-    """Set the stub script, run mara.sh (DRY_RUN), return combined output."""
+def _run_argus(script, **env_over):
+    """Set the stub script, run argus.sh (DRY_RUN), return combined output."""
     _set_script(script)
-    tmp = tempfile.mkdtemp(prefix="mara-test-")
+    tmp = tempfile.mkdtemp(prefix="argus-test-")
     env = dict(os.environ)
     env.update(
         {
-            "MARA_HEALTH_URL": f"http://127.0.0.1:{PORT}/api/health",
-            "MARA_DRY_RUN": "1",
-            "MARA_CONFIRM_DELAY_SECS": "0",
-            "MARA_CONFIRM_POLLS": "3",
-            "MARA_STATE_DIR": tmp,
-            "MARA_LOG_HOST": "",  # no ssh log-context fetch
-            "MARA_REPO": "Example/repo",       # now required
-            "MARA_SERVICE_NAME": "heron",      # keep the readable name in asserts
+            "ARGUS_HEALTH_URL": f"http://127.0.0.1:{PORT}/api/health",
+            "ARGUS_DRY_RUN": "1",
+            "ARGUS_CONFIRM_DELAY_SECS": "0",
+            "ARGUS_CONFIRM_POLLS": "3",
+            "ARGUS_STATE_DIR": tmp,
+            "ARGUS_LOG_HOST": "",  # no ssh log-context fetch
+            "ARGUS_REPO": "Example/repo",       # now required
+            "ARGUS_SERVICE_NAME": "heron",      # keep the readable name in asserts
             # Drive the optional "parked" detection against the stub's shape.
-            "MARA_READY_JQ": ".data.pipelines[0].running",
-            "MARA_READY_EXPECT": "true",
+            "ARGUS_READY_JQ": ".data.pipelines[0].running",
+            "ARGUS_READY_EXPECT": "true",
         }
     )
     env.update(env_over)
@@ -93,21 +93,21 @@ def _run_mara(script, **env_over):
 # ---- tests ----------------------------------------------------------------
 
 def test_healthy_no_file():
-    out = _run_mara([{"code": 200, "running": True}])
+    out = _run_argus([{"code": 200, "running": True}])
     assert "prod heron OK" in out, out
     assert "would file" not in out, out
 
 
 def test_transient_down_then_up_does_not_file():
     # poll1 = down (a restart blip), poll2 = healthy → transient, no incident.
-    out = _run_mara([{"code": 503}, {"code": 200, "running": True}])
+    out = _run_argus([{"code": 503}, {"code": 200, "running": True}])
     assert "transient" in out and "not filing" in out, out
     assert "would file" not in out, out
 
 
 def test_sustained_down_files():
     # every poll fails → real outage → would file prod-down.
-    out = _run_mara([{"code": 503}])
+    out = _run_argus([{"code": 503}])
     assert "would file" in out, out
     assert "prod-down" in out, out
     assert "3/3 consecutive polls" in out, out
@@ -115,20 +115,20 @@ def test_sustained_down_files():
 
 def test_transient_parked_then_running_does_not_file():
     # pipeline briefly running=false during deploy, then resumes → no incident.
-    out = _run_mara([{"code": 200, "running": False}, {"code": 200, "running": True}])
+    out = _run_argus([{"code": 200, "running": False}, {"code": 200, "running": True}])
     assert "transient" in out and "not filing" in out, out
     assert "would file" not in out, out
 
 
 def test_sustained_parked_files():
-    out = _run_mara([{"code": 200, "running": False}])
+    out = _run_argus([{"code": 200, "running": False}])
     assert "would file" in out, out
     assert "prod-parked" in out, out
 
 
 def test_confirm_polls_1_files_on_first_failure():
     # CONFIRM_POLLS=1 disables debounce → first failure files immediately.
-    out = _run_mara([{"code": 503}, {"code": 200, "running": True}], MARA_CONFIRM_POLLS="1")
+    out = _run_argus([{"code": 503}, {"code": 200, "running": True}], ARGUS_CONFIRM_POLLS="1")
     assert "would file" in out, out
     assert "prod-down" in out, out
 

@@ -1,6 +1,6 @@
 name: self-implement
 
-# agent-ops dogfooding its OWN implement surface (wiwi) on its OWN issues, via
+# olympus dogfooding its OWN implement surface (hephaestus) on its OWN issues, via
 # a local reusable-workflow ref. DORMANT until `SELF_DOGFOOD_ENABLED == 'true'`
 # AND secrets + a self-hosted runner are provisioned (see SELF-DOGFOOD.md).
 
@@ -18,5 +18,7 @@ jobs:
     if: ${{ vars.SELF_DOGFOOD_ENABLED == 'true' && github.event.label.name == 'agent:try' }}
     uses: ./.github/workflows/implement.yml
     with:
-      runner_labels: '["self-hosted","agent-ops"]'
+      olympus_repo: ${{ github.repository }}
+      olympus_ref: ${{ github.sha }}
+      runner_labels: '["self-hosted","olympus"]'
     secrets: inherit

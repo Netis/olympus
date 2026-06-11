@@ -1,4 +1,4 @@
-# Cookbook: agent-ops runner on DigitalOcean
+# Cookbook: Olympus runner on DigitalOcean
 
 A Droplet is the fastest hosted option: a few dollars a month, up in a minute,
 no cloud-IAM ceremony.
@@ -13,14 +13,14 @@ no cloud-IAM ceremony.
 
 ```bash
 # one-time: doctl auth init ; doctl compute ssh-key list  (note your key id/fingerprint)
-doctl compute droplet create agent-ops-runner \
+doctl compute droplet create olympus-runner \
   --image ubuntu-24-04-x64 \
   --size s-2vcpu-4gb \
   --region nyc3 \
   --ssh-keys <your-ssh-key-fingerprint> \
   --wait
 
-doctl compute droplet list agent-ops-runner --format Name,PublicIPv4
+doctl compute droplet list olympus-runner --format Name,PublicIPv4
 ssh root@<PUBLIC_IP>
 ```
 
@@ -51,7 +51,7 @@ always-responsive loop, leave it running.
 ## 4. Bring it online
 
 Continue with **Steps A–D** in [`./README.md`](./README.md): bootstrap the
-Droplet, register the runner (label `self-hosted,agent-ops`), set the secrets,
+Droplet, register the runner (label `self-hosted,olympus`), set the secrets,
 smoke-test.
 
 ## Pros / cons

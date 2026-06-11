@@ -49,9 +49,9 @@ I had a look into it, but before I pick it up I want to be sure I'd be fixing ex
   if [ "$verdict" = "needs_info" ] || [ "$verdict" = "skip" ]; then
     # Label names come from config (set in the live flow); tests run this
     # without config loaded, so fall back to the defaults.
-    local l_try="${AGENT_OPS_LABEL_TRY:-agent:try}"
-    local l_skip="${AGENT_OPS_LABEL_SKIP:-agent:skip}"
-    local l_assess="${AGENT_OPS_LABEL_ASSESS:-agent:assess}"
+    local l_try="${OLYMPUS_LABEL_TRY:-agent:try}"
+    local l_skip="${OLYMPUS_LABEL_SKIP:-agent:skip}"
+    local l_assess="${OLYMPUS_LABEL_ASSESS:-agent:assess}"
     cat <<FOOT
 
 <details><summary>Maintainer controls</summary>
@@ -63,7 +63,7 @@ FOOT
 
   # Invisible breadcrumb (no rendered output) so re-triage / tooling can tell a
   # triage-authored comment from a human one without polluting the voice.
-  printf '\n<!-- agent-ops-triage:%s -->\n' "$verdict"
+  printf '\n<!-- olympus-triage:%s -->\n' "$verdict"
 }
 
 # Sourced by tests with TRIAGE_LIB_ONLY=1: load the helpers above and stop
@@ -73,27 +73,27 @@ if [ "${TRIAGE_LIB_ONLY:-}" = "1" ]; then
   return 0 2>/dev/null || exit 0
 fi
 
-# Load the consumer repo's .agent-ops.json → AGENT_OPS_* (gates, labels,
+# Load the consumer repo's .olympus.json → OLYMPUS_* (gates, labels,
 # language, agent names). Defaults keep the original behavior if it's absent.
 # shellcheck source=scripts/lib/config.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/config.sh"
-agent_ops_load_config
+olympus_load_config
 
 # Per-repo language directive for the reply. "auto" (default) → match the
 # reporter's language; a fixed code (e.g. "en", "zh") → always reply in it.
-if [ "${AGENT_OPS_LANGUAGE:-auto}" = "auto" ]; then
+if [ "${OLYMPUS_LANGUAGE:-auto}" = "auto" ]; then
   LANG_DIRECTIVE='write the reply in the SAME language the reporter used in the
     issue (title + body). A Chinese issue gets a Chinese reply; Japanese →
     Japanese; Spanish → Spanish; and so on. Match them naturally and fluently.
     Fall back to English only if the issue language is genuinely unclear.'
 else
-  LANG_DIRECTIVE="always write the reply in this language: ${AGENT_OPS_LANGUAGE}."
+  LANG_DIRECTIVE="always write the reply in this language: ${OLYMPUS_LANGUAGE}."
 fi
 
 # ---------------------------------------------------------------------------
 # Auto-path guards. On the auto path (TRIGGER_KIND=opened) we skip two classes
 # of issue so they never get auto-routed into the autonomous dev agent:
-#   - prod incidents filed by mara (incident/mara labels) — an operator routes
+#   - prod incidents filed by argus (incident/argus labels) — an operator routes
 #     these in deliberately via `agent:assess`.
 #   - issues already in the pipeline or muted (agent:try / agent:skip /
 #     auto-agent) — avoids duplicate triage and re-trigger loops.
@@ -103,12 +103,12 @@ fi
 if [ "${TRIGGER_KIND:-opened}" = "opened" ]; then
   LABELS=$(gh issue view "$ISSUE_NUMBER" --json labels --jq '[.labels[].name] | join(",")' 2>/dev/null || echo "")
   case ",$LABELS," in
-    *,incident,*|*,mara,*)
+    *,incident,*|*,argus,*)
       echo "auto-triage skipped: prod-incident issue #$ISSUE_NUMBER; add agent:assess to route it manually"
       exit 0 ;;
   esac
   case ",$LABELS," in
-    *,"$AGENT_OPS_LABEL_TRY",*|*,"$AGENT_OPS_LABEL_SKIP",*|*,"$AGENT_OPS_LABEL_AUTO_AGENT",*)
+    *,"$OLYMPUS_LABEL_TRY",*|*,"$OLYMPUS_LABEL_SKIP",*|*,"$OLYMPUS_LABEL_AUTO_AGENT",*)
       echo "auto-triage skipped: issue #$ISSUE_NUMBER is already queued/muted/has-PR"
       exit 0 ;;
   esac
@@ -142,10 +142,10 @@ JOB B — DECIDE if the autonomous dev agent can implement it UNATTENDED
 Verdict \`do\` ONLY when ALL of these hold:
   1. Concrete, actionable description AND explicit acceptance criteria (you can
      list 2+ objectively checkable assertions).
-  2. Estimated diff < ${AGENT_OPS_MAX_LOC} LOC across < ${AGENT_OPS_MAX_FILES} files.
-  3. Contained: ${AGENT_OPS_CONTAINED} — not cross-cutting architecture work.
+  2. Estimated diff < ${OLYMPUS_MAX_LOC} LOC across < ${OLYMPUS_MAX_FILES} files.
+  3. Contained: ${OLYMPUS_CONTAINED} — not cross-cutting architecture work.
   4. No new runtime dependency, no new secret, no new external network call.
-  5. Ships with a deterministic test (${AGENT_OPS_TEST_HINT}) in the same PR —
+  5. Ships with a deterministic test (${OLYMPUS_TEST_HINT}) in the same PR —
      not "needs manual QA".
 If gate 1 fails → \`needs_info\`. If gates 2–5 fail → \`skip\`. When in doubt,
 be strict → \`needs_info\`.
@@ -202,7 +202,7 @@ EOF
 
 # Run the configured agent harness (default: claude) on the triage prompt.
 # agent-harness.sh sources litellm-wait.sh and owns the gateway pre-flight wait
-# + the retry-on-gateway-down loop; which CLI runs is .agent-ops.json's
+# + the retry-on-gateway-down loop; which CLI runs is .olympus.json's
 # harness.kind. Triage is idempotent (input = the issue body) so a from-scratch
 # retry is safe.
 # shellcheck source=../lib/agent-harness.sh
@@ -262,10 +262,10 @@ case "$VERDICT" in
     # still label (with GITHUB_TOKEN) but the dev agent won't auto-start;
     # an operator can re-toggle the label by hand.
     if [ -n "${AGENT_GH_TOKEN:-}" ]; then
-      GH_TOKEN="$AGENT_GH_TOKEN" gh issue edit "$ISSUE_NUMBER" --add-label "$AGENT_OPS_LABEL_TRY"
+      GH_TOKEN="$AGENT_GH_TOKEN" gh issue edit "$ISSUE_NUMBER" --add-label "$OLYMPUS_LABEL_TRY"
     else
-      echo "warning: AGENT_GH_TOKEN unset; labeling under GITHUB_TOKEN — ${AGENT_OPS_DEV_AGENT_NAME} will NOT auto-start" >&2
-      gh issue edit "$ISSUE_NUMBER" --add-label "$AGENT_OPS_LABEL_TRY"
+      echo "warning: AGENT_GH_TOKEN unset; labeling under GITHUB_TOKEN — ${OLYMPUS_DEV_AGENT_NAME} will NOT auto-start" >&2
+      gh issue edit "$ISSUE_NUMBER" --add-label "$OLYMPUS_LABEL_TRY"
     fi
     compose_comment_body "$REPLY" "do" 0 > "$TMP_BODY"
     gh issue comment "$ISSUE_NUMBER" --body-file "$TMP_BODY"

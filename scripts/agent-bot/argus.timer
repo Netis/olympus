@@ -1,5 +1,5 @@
 [Unit]
-Description=mara — poll prod heron every 5 minutes
+Description=argus — poll prod health every 5 minutes
 After=network-online.target
 
 [Timer]

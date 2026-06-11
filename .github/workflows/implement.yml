@@ -1,4 +1,4 @@
-name: agent-ops-implement
+name: olympus-implement
 
 # Reusable dev-agent workflow. The consumer triggers it when the triage agent
 # (or a human) adds the `agent:try` label to an issue:
@@ -8,21 +8,24 @@ name: agent-ops-implement
 #   jobs:
 #     implement:
 #       if: github.event.label.name == 'agent:try'
-#       uses: Netis/agent-ops/.github/workflows/implement.yml@v0.1.0
+#       uses: Netis/olympus/.github/workflows/implement.yml@v0.1.0
 #       permissions: { contents: write, issues: write, pull-requests: write }
 #       with:
 #         runner_labels: '["self-hosted","my-runner"]'
 #       secrets: inherit
 #
 # The dev agent branches off the default branch, implements within the triaged
-# scope, runs the project's build+test command (from .agent-ops.json), and
+# scope, runs the project's build+test command (from .olympus.json), and
 # opens a DRAFT PR labelled `auto-agent`. Review/merge is the review workflow's
 # job. Nothing here is project-specific.
 
 on:
   workflow_call:
     inputs:
-      agent_ops_ref:
+      olympus_repo:
+        type: string
+        default: Netis/olympus
+      olympus_ref:
         type: string
         default: main
       runner_labels:
@@ -30,7 +33,7 @@ on:
         default: '["self-hosted"]'
       config_path:
         type: string
-        default: .agent-ops.json
+        default: .olympus.json
       model:
         type: string
         default: claude-3-5-sonnet-20241022
@@ -45,7 +48,7 @@ on:
       AUTO_MERGE_TEAM:  { required: false }
 
 concurrency:
-  group: agent-ops-implement-${{ github.event.issue.number }}
+  group: olympus-implement-${{ github.event.issue.number }}
   cancel-in-progress: false
 
 jobs:
@@ -73,20 +76,20 @@ jobs:
           # are suppressed by GitHub's anti-recursion rule).
           token: ${{ secrets.AGENT_GH_TOKEN }}
 
-      - name: Fetch agent-ops scripts
+      - name: Fetch olympus scripts
         uses: actions/checkout@v4
         with:
-          repository: Netis/agent-ops
-          ref: ${{ inputs.agent_ops_ref }}
+          repository: ${{ inputs.olympus_repo }}
+          ref: ${{ inputs.olympus_ref }}
           token: ${{ secrets.AGENT_GH_TOKEN }}
           path: _agentops
 
       - name: Implement
         env:
-          AGENT_OPS_CONFIG: ${{ inputs.config_path }}
+          OLYMPUS_CONFIG: ${{ inputs.config_path }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_TITLE:  ${{ github.event.issue.title }}
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
           GH_TOKEN:        ${{ secrets.AGENT_GH_TOKEN }}
           AUTO_MERGE_TEAM: ${{ secrets.AUTO_MERGE_TEAM }}
-        run: bash _agentops/scripts/agent-bot/run_wiwi.sh
+        run: bash _agentops/scripts/agent-bot/run_hephaestus.sh

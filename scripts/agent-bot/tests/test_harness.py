@@ -34,8 +34,8 @@ def dry_run(args, config=None):
     env["AGENT_HARNESS_DRYRUN"] = "1"
     pre = ""
     if config:
-        env["AGENT_OPS_CONFIG"] = config
-        pre = f'source "{CONFIG}"; agent_ops_load_config 2>/dev/null; '
+        env["OLYMPUS_CONFIG"] = config
+        pre = f'source "{CONFIG}"; olympus_load_config 2>/dev/null; '
     script = pre + f'source "{HARNESS}"; agent_run ' + args
     r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env)
     return r.stdout.strip()

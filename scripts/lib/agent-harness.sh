@@ -4,10 +4,10 @@
 # Every agent surface (triage / implement / review / revise) used to invoke the
 # `claude` CLI inline, each with its own copy of the "wait for the gateway, run,
 # retry if the gateway died mid-stream" loop. This centralises that into ONE
-# function so the harness CLI becomes a `.agent-ops.json` choice:
+# function so the harness CLI becomes a `.olympus.json` choice:
 #
 #   harness.kind = "claude"  (default — byte-compatible with the old inline calls)
-#                | "custom"  (run AGENT_OPS_HARNESS_CMD, a command template)
+#                | "custom"  (run OLYMPUS_HARNESS_CMD, a command template)
 #
 # Public entry point:
 #   agent_run --profile {investigate|implement|review} --prompt <file> \
@@ -16,12 +16,12 @@
 #             [--output-format F] [--permission-mode M] [--label NAME]
 #
 # Returns the harness exit code. Encapsulates: the pre-flight gateway wait + the
-# retry-on-gateway-down loop (both no-ops when AGENT_OPS_HEALTH_PROBE != "true").
+# retry-on-gateway-down loop (both no-ops when OLYMPUS_HEALTH_PROBE != "true").
 #
 # Config consumed (exported by config.sh; safe defaults if unset):
-#   AGENT_OPS_HARNESS        claude | custom            (default claude)
-#   AGENT_OPS_HARNESS_CMD    custom command template    (custom only)
-#   AGENT_OPS_HEALTH_PROBE   true | false               (default true)
+#   OLYMPUS_HARNESS        claude | custom            (default claude)
+#   OLYMPUS_HARNESS_CMD    custom command template    (custom only)
+#   OLYMPUS_HEALTH_PROBE   true | false               (default true)
 #   ANTHROPIC_MODEL          model id for the claude harness / {model} placeholder
 #
 # Dry run: AGENT_HARNESS_DRYRUN=1 prints the command that WOULD run (one line)
@@ -72,7 +72,7 @@ agent_run() {
   local model="${ANTHROPIC_MODEL:-claude-3-5-sonnet-20241022}"
   local tool_set; tool_set="${tools:-$(_agent_profile_tools "$profile")}"
   local write; write="$(_agent_profile_write "$profile")"
-  local kind="${AGENT_OPS_HARNESS:-claude}"
+  local kind="${OLYMPUS_HARNESS:-claude}"
 
   # --- build the harness command --------------------------------------------
   # For the claude harness we keep a real argv array (no eval). For custom we
@@ -80,11 +80,11 @@ agent_run() {
   local -a claude_cmd=()
   local custom_cmd=""
   if [ "$kind" = "custom" ]; then
-    [ -n "${AGENT_OPS_HARNESS_CMD:-}" ] || { echo "agent_run: harness.kind=custom but AGENT_OPS_HARNESS_CMD is empty" >&2; return 78; }
+    [ -n "${OLYMPUS_HARNESS_CMD:-}" ] || { echo "agent_run: harness.kind=custom but OLYMPUS_HARNESS_CMD is empty" >&2; return 78; }
     # custom always writes the agent's output to a file we control; for stream
     # profiles that's a temp the loop tees to stdout afterwards.
     local cust_out="${out:-${streamlog:-/dev/stdout}}"
-    custom_cmd="$AGENT_OPS_HARNESS_CMD"
+    custom_cmd="$OLYMPUS_HARNESS_CMD"
     custom_cmd="${custom_cmd//\{model\}/$model}"
     custom_cmd="${custom_cmd//\{prompt_file\}/$prompt}"
     custom_cmd="${custom_cmd//\{out\}/$cust_out}"
@@ -112,7 +112,7 @@ agent_run() {
   fi
 
   # --- pre-flight: gateway reachable? ---------------------------------------
-  if [ "${AGENT_OPS_HEALTH_PROBE:-true}" = "true" ]; then
+  if [ "${OLYMPUS_HEALTH_PROBE:-true}" = "true" ]; then
     wait_for_litellm || return $?
   fi
 
@@ -141,7 +141,7 @@ agent_run() {
     set -e
 
     [ "$rc" -eq 0 ] && break
-    if [ "${AGENT_OPS_HEALTH_PROBE:-true}" != "true" ] || ! litellm_appears_down; then
+    if [ "${OLYMPUS_HEALTH_PROBE:-true}" != "true" ] || ! litellm_appears_down; then
       break                                   # failure is not a gateway outage — don't retry
     fi
     if [ "$attempt" -ge "$retry_max" ]; then

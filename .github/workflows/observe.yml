@@ -1,12 +1,12 @@
-name: agent-ops-observe
+name: olympus-observe
 
 # Reusable production observer. One health poll of a deployed service; on a
 # SUSTAINED failure (confirm-debounce filters deploy/restart blips) it files a
 # scrubbed, deduplicated incident issue that the triage→dev loop can pick up.
 #
-# Two ways to run mara:
+# Two ways to run argus:
 #   1. This scheduled workflow (simplest; runs on the self-hosted runner).
-#   2. The systemd timer units in scripts/agent-bot/ (mara.service/.timer) on a
+#   2. The systemd timer units in scripts/agent-bot/ (argus.service/.timer) on a
 #      host ISOLATED from prod — preferred for real isolation, since a GHA run
 #      can't observe an outage that also takes down the runner.
 #
@@ -14,19 +14,22 @@ name: agent-ops-observe
 #   on: { schedule: [{ cron: '*/5 * * * *' }], workflow_dispatch: {} }
 #   jobs:
 #     observe:
-#       uses: Netis/agent-ops/.github/workflows/observe.yml@v0.1.0
+#       uses: Netis/olympus/.github/workflows/observe.yml@v0.1.0
 #       permissions: { issues: write }
 #       with:
 #         runner_labels: '["self-hosted","my-runner"]'
 #       secrets: inherit
 #
-# Health URL + readiness come from .agent-ops.json (observer.*); the issue is
+# Health URL + readiness come from .olympus.json (observer.*); the issue is
 # filed on observer.repo.
 
 on:
   workflow_call:
     inputs:
-      agent_ops_ref:
+      olympus_repo:
+        type: string
+        default: Netis/olympus
+      olympus_ref:
         type: string
         default: main
       runner_labels:
@@ -34,7 +37,7 @@ on:
         default: '["self-hosted"]'
       config_path:
         type: string
-        default: .agent-ops.json
+        default: .olympus.json
       dry_run:
         type: boolean
         default: false
@@ -42,7 +45,7 @@ on:
       AGENT_GH_TOKEN: { required: true }
 
 concurrency:
-  group: agent-ops-observe
+  group: olympus-observe
   cancel-in-progress: false
 
 jobs:
@@ -55,24 +58,24 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Fetch agent-ops scripts
+      - name: Fetch olympus scripts
         uses: actions/checkout@v4
         with:
-          repository: Netis/agent-ops
-          ref: ${{ inputs.agent_ops_ref }}
+          repository: ${{ inputs.olympus_repo }}
+          ref: ${{ inputs.olympus_ref }}
           token: ${{ secrets.AGENT_GH_TOKEN }}
           path: _agentops
 
       - name: Observe
         env:
-          AGENT_OPS_CONFIG: ${{ inputs.config_path }}
-          MARA_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
-          MARA_STATE_DIR: ${{ github.workspace }}/.mara-state
+          OLYMPUS_CONFIG: ${{ inputs.config_path }}
+          ARGUS_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          ARGUS_STATE_DIR: ${{ github.workspace }}/.argus-state
           GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
-        # config.sh (sourced by a tiny shim) maps observer.* → MARA_*; mara.sh
-        # itself reads MARA_*. We source config here so a GHA run gets the same
+        # config.sh (sourced by a tiny shim) maps observer.* → ARGUS_*; argus.sh
+        # itself reads ARGUS_*. We source config here so a GHA run gets the same
         # observer.* mapping the systemd path would get from its EnvironmentFile.
         run: |
           source _agentops/scripts/lib/config.sh
-          agent_ops_load_config
-          bash _agentops/scripts/agent-bot/mara.sh
+          olympus_load_config
+          bash _agentops/scripts/agent-bot/argus.sh

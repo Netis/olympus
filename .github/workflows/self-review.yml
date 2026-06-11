@@ -1,6 +1,6 @@
 name: self-review
 
-# agent-ops dogfooding its OWN review surface (vivi) on its OWN PRs, via a local
+# olympus dogfooding its OWN review surface (themis) on its OWN PRs, via a local
 # reusable-workflow ref. Fires after this repo's `ci` workflow succeeds on a PR.
 # DORMANT until `SELF_DOGFOOD_ENABLED == 'true'` AND secrets + a self-hosted
 # runner are provisioned (see SELF-DOGFOOD.md).
@@ -27,6 +27,8 @@ jobs:
     if: ${{ vars.SELF_DOGFOOD_ENABLED == 'true' }}
     uses: ./.github/workflows/review.yml
     with:
-      runner_labels: '["self-hosted","agent-ops"]'
+      olympus_repo: ${{ github.repository }}
+      olympus_ref: ${{ github.sha }}
+      runner_labels: '["self-hosted","olympus"]'
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit

@@ -1,11 +1,11 @@
-name: agent-ops-triage
+name: olympus-triage
 
 # Reusable triage workflow. A consumer repo calls it from a thin wrapper that
 # triggers on issues (see examples/consumer/.github/workflows/triage.yml):
 #
 #   jobs:
 #     triage:
-#       uses: Netis/agent-ops/.github/workflows/triage.yml@v0.1.0
+#       uses: Netis/olympus/.github/workflows/triage.yml@v0.1.0
 #       permissions: { contents: read, issues: write }
 #       with:
 #         runner_labels: '["self-hosted","my-runner"]'
@@ -14,13 +14,16 @@ name: agent-ops-triage
 # It investigates the issue, then posts a warm maintainer-voice reply and (on a
 # clean 5-gate pass) labels it for the dev agent. All repo-specific behavior —
 # gate thresholds, label names, language — comes from the consumer's
-# .agent-ops.json; nothing here is hardcoded to any one project.
+# .olympus.json; nothing here is hardcoded to any one project.
 
 on:
   workflow_call:
     inputs:
-      agent_ops_ref:
-        description: Tag/branch of Netis/agent-ops whose scripts to run. Pin to the same version as the @ref above.
+      olympus_repo:
+        type: string
+        default: Netis/olympus
+      olympus_ref:
+        description: Tag/branch of Netis/olympus whose scripts to run. Pin to the same version as the @ref above.
         type: string
         default: main
       runner_labels:
@@ -29,7 +32,7 @@ on:
         default: '["self-hosted"]'
       config_path:
         type: string
-        default: .agent-ops.json
+        default: .olympus.json
       model:
         type: string
         default: claude-3-5-sonnet-20241022
@@ -46,7 +49,7 @@ concurrency:
   # One triage per issue; do NOT cancel in progress — the agent:try label this
   # adds re-enters the same group as a skipped run, which must not kill the
   # still-finishing real run.
-  group: agent-ops-triage-${{ github.event.issue.number }}
+  group: olympus-triage-${{ github.event.issue.number }}
   cancel-in-progress: false
 
 jobs:
@@ -72,17 +75,17 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Fetch agent-ops scripts
+      - name: Fetch olympus scripts
         uses: actions/checkout@v4
         with:
-          repository: Netis/agent-ops
-          ref: ${{ inputs.agent_ops_ref }}
+          repository: ${{ inputs.olympus_repo }}
+          ref: ${{ inputs.olympus_ref }}
           token: ${{ secrets.AGENT_GH_TOKEN }}
           path: _agentops
 
       - name: Triage issue
         env:
-          AGENT_OPS_CONFIG: ${{ inputs.config_path }}
+          OLYMPUS_CONFIG: ${{ inputs.config_path }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_TITLE:  ${{ github.event.issue.title }}
           ISSUE_BODY:   ${{ github.event.issue.body }}

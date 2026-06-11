@@ -1,12 +1,12 @@
 {
-  "$schema": "https://raw.githubusercontent.com/Netis/agent-ops/main/schema/agent-ops.schema.json",
+  "$schema": "https://raw.githubusercontent.com/Netis/olympus/main/schema/olympus.schema.json",
   "project": {
     "name": "my-service",
     "default_branch": "main"
   },
   "agents": {
-    "review_bot_login": "vivi",
-    "dev_agent_name": "wiwi"
+    "review_bot_login": "themis",
+    "dev_agent_name": "hephaestus"
   },
   "labels": {
     "assess": "agent:assess",

@@ -1,7 +1,7 @@
-# Config reference — `.agent-ops.json`
+# Config reference — `.olympus.json`
 
 The single source of per-repo policy. Validated by
-[`schema/agent-ops.schema.json`](../schema/agent-ops.schema.json). Every field
+[`schema/olympus.schema.json`](../schema/olympus.schema.json). Every field
 is optional; an omitted value uses the **default** shown. With no file at all,
 the agents behave exactly as the defaults (back-compatible).
 
@@ -17,7 +17,7 @@ Precedence for any value: an exported **env var** > the **config file** > the
 ## `agents`
 | Field | Default | Meaning |
 |---|---|---|
-| `review_bot_login` | `vivi` | GitHub login (or a marker in the review body) used by auto-merge / revise to find the review bot's verdict. |
+| `review_bot_login` | `themis` | GitHub login (or a marker in the review body) used by auto-merge / revise to find the review bot's verdict. |
 | `dev_agent_name` | `the dev agent` | Display name for the implementer (commit author, log lines). |
 
 ## `labels`
@@ -51,7 +51,7 @@ Precedence for any value: an exported **env var** > the **config file** > the
 | Field | Default | Meaning |
 |---|---|---|
 | `service_name` | `the service` | Name used in incident text. |
-| `health_url` | — | Health endpoint mara polls. (For the systemd path, set via the unit's `MARA_HEALTH_URL` instead.) |
+| `health_url` | — | Health endpoint argus polls. (For the systemd path, set via the unit's `ARGUS_HEALTH_URL` instead.) |
 | `repo` | — (required to file) | `owner/name` the incident issue is filed on. |
 | `labels` | `incident` | Comma-separated issue labels. |
 | `readiness.jq` | — | Optional jq filter over the health JSON for "parked" (up-but-not-working) detection. Omit → DOWN-only. |
@@ -79,5 +79,5 @@ full `custom` (codex) walkthrough + the prompt-shape constraint.
 
 ## Example
 
-See [`examples/consumer/.agent-ops.json`](../examples/consumer/.agent-ops.json)
+See [`examples/consumer/.olympus.json`](../examples/consumer/.olympus.json)
 for a complete, commented-by-structure config.

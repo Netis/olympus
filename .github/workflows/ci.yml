@@ -1,7 +1,7 @@
 name: ci
 
-# agent-ops's own CI — the framework eats its own dog food. Lints the shell,
-# runs the stdlib tests for the triage composer, the mara observer, and the
+# olympus's own CI — the framework eats its own dog food. Lints the shell,
+# runs the stdlib tests for the triage composer, the argus observer, and the
 # config loader, and runs the leakage gate on this repo itself.
 
 on:
@@ -28,8 +28,8 @@ jobs:
       - name: triage composer tests
         run: python3 scripts/agent-bot/tests/test_triage.py
 
-      - name: mara observer tests
-        run: python3 scripts/agent-bot/tests/test_mara.py
+      - name: argus observer tests
+        run: python3 scripts/agent-bot/tests/test_argus.py
 
       - name: config loader tests
         run: python3 scripts/agent-bot/tests/test_config.py
@@ -45,3 +45,6 @@ jobs:
 
       - name: leakage gate (self)
         run: bash scripts/lint/check-leakage.sh
+
+      - name: legacy-naming regression guard (rename to Olympus stays clean)
+        run: bash scripts/lint/check-legacy-naming.sh

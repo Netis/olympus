@@ -1,14 +1,16 @@
 name: self-guard
 
-# agent-ops eating its own dog food: run THIS repo's own guard.yml hygiene
-# gate (the leakage linter) on agent-ops's own PRs + main pushes, via a local
+# olympus eating its own dog food: run THIS repo's own guard.yml hygiene
+# gate (the leakage linter) on olympus's own PRs + main pushes, via a local
 # reusable-workflow ref (`uses: ./...`). The leakage scan runs against this
 # PR's tracked files + this PR's scripts/lint/leakage-allowlist.txt; the linter
-# logic itself comes from guard.yml's pinned agent-ops checkout (default main),
-# and script breakage is separately caught by ci.yml's shellcheck.
+# logic itself is fetched from THIS repo at THIS commit (olympus_repo =
+# github.repository, olympus_ref = github.sha — name-agnostic, so it works
+# before/after the GitHub repo rename and tests the current branch's scripts).
+# Script breakage is separately caught by ci.yml's shellcheck.
 #
 # Zero infra: guard.yml runs on GitHub-hosted ubuntu and needs no secrets or
-# self-hosted runner. run_secret_checks stays false (agent-ops has no LITELLM /
+# self-hosted runner. run_secret_checks stays false (olympus has no LITELLM /
 # AGENT_GH_TOKEN secrets, and check-secret-values is consumer-specific).
 #
 # The agentic surfaces (triage/review/implement/revise) are wired in
@@ -27,4 +29,6 @@ jobs:
   guard:
     uses: ./.github/workflows/guard.yml
     with:
+      olympus_repo: ${{ github.repository }}
+      olympus_ref: ${{ github.sha }}
       run_secret_checks: false

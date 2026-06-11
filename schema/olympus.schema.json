@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/Netis/agent-ops/main/schema/agent-ops.schema.json",
-  "title": "agent-ops consumer config (.agent-ops.json)",
-  "description": "Per-repo policy for the agent-ops mechanism. Every field is optional; omitted values fall back to a built-in default. This file is the ONLY place a consuming repo expresses repo-specific behavior — the agent-ops scripts and workflows carry none.",
+  "$id": "https://raw.githubusercontent.com/Netis/olympus/main/schema/olympus.schema.json",
+  "title": "Olympus consumer config (.olympus.json)",
+  "description": "Per-repo policy for the Olympus mechanism. Every field is optional; omitted values fall back to a built-in default. This file is the ONLY place a consuming repo expresses repo-specific behavior — the Olympus scripts and workflows carry none.",
   "type": "object",
   "additionalProperties": true,
   "properties": {
@@ -19,7 +19,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "review_bot_login": { "type": "string", "default": "vivi", "description": "GitHub login (or body-footer marker) of the review bot. Auto-merge / revise key off this to find its review." },
+        "review_bot_login": { "type": "string", "default": "themis", "description": "GitHub login (or body-footer marker) of the review bot. Auto-merge / revise key off this to find its review." },
         "dev_agent_name": { "type": "string", "default": "the dev agent", "description": "Display name used in commit author + log lines for the implementer." }
       }
     },
@@ -62,7 +62,7 @@
       "additionalProperties": false,
       "properties": {
         "service_name": { "type": "string", "default": "the service", "description": "Name used in incident text." },
-        "health_url": { "type": "string", "description": "Health endpoint mara polls." },
+        "health_url": { "type": "string", "description": "Health endpoint argus polls." },
         "repo": { "type": "string", "description": "owner/name the incident issue is filed on." },
         "labels": { "type": "string", "default": "incident", "description": "Comma-separated issue labels." },
         "readiness": {
