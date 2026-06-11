@@ -70,8 +70,10 @@ benefits. No copy-pasted scripts to drift.
 | Revise | `agent-bot/run_revise.sh` | `revise.yml` | ported; review-bot login config-driven |
 
 "Pending" = a deliberate follow-up to deepen as the second repo onboards (see
-[docs/roadmap.md](docs/roadmap.md)); the runtime-critical coupling (what label,
-which bot, which branch, which build command) is already config-driven.
+[docs/roadmap.md](docs/roadmap.md), with the codebase-level breakdown in
+[docs/improvement-plan.md](docs/improvement-plan.md)); the runtime-critical
+coupling (what label, which bot, which branch, which build command) is already
+config-driven.
 
 ## Onboard a repo in 4 steps
 
