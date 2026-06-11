@@ -30,7 +30,7 @@ set -euo pipefail
 # directly (see tests/test_triage.py).
 # ---------------------------------------------------------------------------
 compose_comment_body() {
-  local reply="$1" verdict="$2" downgraded="${3:-0}"
+  local reply="$1" verdict="$2" downgraded="${3:-0}" withheld="${4:-0}"
 
   # The agent writes `reply` in the reporter's own language. The two bits this
   # function adds are intentionally English: the fallback below only fires on a
@@ -40,13 +40,21 @@ compose_comment_body() {
     reply="Thanks so much for taking the time to file this — I really appreciate it. 🙏
 
 I had a look into it, but before I pick it up I want to be sure I'd be fixing exactly the right thing. Could you add a couple of concrete, checkable acceptance criteria — and a quick way to reproduce it, if you have one? With those in hand I'll gladly take another pass and get it moving."
+  elif [ "$withheld" = "1" ]; then
+    # verdict=do, but auto-dispatch was withheld (the author isn't on the
+    # maintainer team). The agent's do-reply promises the work is queued — not
+    # true yet — so replace it with an honest "flagged for a maintainer" note.
+    reply="Thanks so much for the detailed report — I really appreciate it. 🙏
+
+I looked into this and it does look well-scoped and actionable. Since it came from outside the maintainer team, I've flagged it for a maintainer to confirm before our automated dev agent picks it up — we'll keep you posted right here."
   fi
 
   printf '%s\n' "$reply"
 
   # For anything we are NOT auto-queuing, surface the manual overrides — but
-  # tucked into a collapsed block so they never intrude on the human reply.
-  if [ "$verdict" = "needs_info" ] || [ "$verdict" = "skip" ]; then
+  # tucked into a collapsed block so they never intrude on the human reply. That
+  # includes a do whose dispatch was withheld pending a maintainer's go-ahead.
+  if [ "$verdict" = "needs_info" ] || [ "$verdict" = "skip" ] || [ "$withheld" = "1" ]; then
     # Label names come from config (set in the live flow); tests run this
     # without config loaded, so fall back to the defaults.
     local l_try="${OLYMPUS_LABEL_TRY:-agent:try}"
@@ -62,8 +70,13 @@ FOOT
   fi
 
   # Invisible breadcrumb (no rendered output) so re-triage / tooling can tell a
-  # triage-authored comment from a human one without polluting the voice.
-  printf '\n<!-- olympus-triage:%s -->\n' "$verdict"
+  # triage-authored comment from a human one without polluting the voice. A
+  # withheld do is marked distinctly from an auto-dispatched do.
+  if [ "$withheld" = "1" ]; then
+    printf '\n<!-- olympus-triage:do-withheld -->\n'
+  else
+    printf '\n<!-- olympus-triage:%s -->\n' "$verdict"
+  fi
 }
 
 # Sourced by tests with TRIAGE_LIB_ONLY=1: load the helpers above and stop
@@ -78,6 +91,32 @@ fi
 # shellcheck source=scripts/lib/config.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/config.sh"
 olympus_load_config
+
+# --- maintainer-dispatch gate ----------------------------------------------
+# A verdict=do means the issue is well-scoped enough for the UNATTENDED dev
+# agent. On a public repo that agent would then act on issue text written by a
+# stranger — so by default we only AUTO-dispatch issues from authors the repo
+# already trusts; everyone else gets the same warm reply plus a maintainer
+# control to dispatch by hand (a human-in-the-loop that can catch injected /
+# malicious content before the agent runs). .triage.auto_dispatch
+# (OLYMPUS_AUTO_DISPATCH): trusted (default) | all | never.
+# True if the GitHub login has write/maintain/admin on the repo. Fail-closed:
+# any API/token error → not trusted → dispatch withheld.
+author_is_trusted() {
+  local who="$1" perm
+  [ -n "$who" ] || return 1
+  perm=$(GH_TOKEN="${AGENT_GH_TOKEN:-${GH_TOKEN:-}}" \
+    gh api "repos/${GITHUB_REPOSITORY:-}/collaborators/${who}/permission" \
+    --jq '.permission' 2>/dev/null || echo "")
+  case "$perm" in admin|write|maintain) return 0 ;; *) return 1 ;; esac
+}
+triage_should_dispatch() {
+  case "${OLYMPUS_AUTO_DISPATCH:-trusted}" in
+    all)   return 0 ;;
+    never) return 1 ;;
+    *)     author_is_trusted "$ISSUE_AUTHOR" ;;
+  esac
+}
 
 # Per-repo language directive for the reply. "auto" (default) → match the
 # reporter's language; a fixed code (e.g. "en", "zh") → always reply in it.
@@ -263,21 +302,29 @@ echo "triage verdict=$VERDICT scope=$SCOPE reason=$REASON" >&2
 TMP_BODY=$(mktemp)
 case "$VERDICT" in
   do)
-    # Add the `agent:try` label using AGENT_GH_TOKEN (a PAT) rather
-    # than the default GITHUB_TOKEN. GitHub deliberately suppresses
-    # `labeled` events emitted by GITHUB_TOKEN to prevent recursive
-    # workflow chains — meaning issue-implement.yml would never fire.
-    # The PAT belongs to a real user, so its label edit fans out to
-    # downstream workflows normally. If AGENT_GH_TOKEN is missing we
-    # still label (with GITHUB_TOKEN) but the dev agent won't auto-start;
-    # an operator can re-toggle the label by hand.
-    if [ -n "${AGENT_GH_TOKEN:-}" ]; then
-      GH_TOKEN="$AGENT_GH_TOKEN" gh issue edit "$ISSUE_NUMBER" --add-label "$OLYMPUS_LABEL_TRY"
+    if triage_should_dispatch; then
+      # Add the `agent:try` label using AGENT_GH_TOKEN (a PAT) rather
+      # than the default GITHUB_TOKEN. GitHub deliberately suppresses
+      # `labeled` events emitted by GITHUB_TOKEN to prevent recursive
+      # workflow chains — meaning issue-implement.yml would never fire.
+      # The PAT belongs to a real user, so its label edit fans out to
+      # downstream workflows normally. If AGENT_GH_TOKEN is missing we
+      # still label (with GITHUB_TOKEN) but the dev agent won't auto-start;
+      # an operator can re-toggle the label by hand.
+      if [ -n "${AGENT_GH_TOKEN:-}" ]; then
+        GH_TOKEN="$AGENT_GH_TOKEN" gh issue edit "$ISSUE_NUMBER" --add-label "$OLYMPUS_LABEL_TRY"
+      else
+        echo "warning: AGENT_GH_TOKEN unset; labeling under GITHUB_TOKEN — ${OLYMPUS_DEV_AGENT_NAME} will NOT auto-start" >&2
+        gh issue edit "$ISSUE_NUMBER" --add-label "$OLYMPUS_LABEL_TRY"
+      fi
+      compose_comment_body "$REPLY" "do" 0 0 > "$TMP_BODY"
     else
-      echo "warning: AGENT_GH_TOKEN unset; labeling under GITHUB_TOKEN — ${OLYMPUS_DEV_AGENT_NAME} will NOT auto-start" >&2
-      gh issue edit "$ISSUE_NUMBER" --add-label "$OLYMPUS_LABEL_TRY"
+      # verdict=do but the author isn't trusted (OLYMPUS_AUTO_DISPATCH gate):
+      # recommend to a maintainer instead of auto-dispatching the agent onto a
+      # stranger's issue text. No try-label; reply notes the maintainer control.
+      echo "triage: verdict=do but dispatch WITHHELD (author '${ISSUE_AUTHOR}' not trusted; OLYMPUS_AUTO_DISPATCH=${OLYMPUS_AUTO_DISPATCH:-trusted})" >&2
+      compose_comment_body "$REPLY" "do" 0 1 > "$TMP_BODY"
     fi
-    compose_comment_body "$REPLY" "do" 0 > "$TMP_BODY"
     gh issue comment "$ISSUE_NUMBER" --body-file "$TMP_BODY"
     ;;
   needs_info|skip)

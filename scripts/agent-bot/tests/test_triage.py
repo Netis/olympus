@@ -28,14 +28,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 TRIAGE = os.path.join(os.path.dirname(HERE), "run_triage.sh")
 
 
-def compose(reply, verdict, downgraded="0"):
+def compose(reply, verdict, downgraded="0", withheld="0"):
     """Source run_triage.sh in lib-only mode and call compose_comment_body."""
     script = (
         f'TRIAGE_LIB_ONLY=1 source "{TRIAGE}"; '
-        'compose_comment_body "$1" "$2" "$3"'
+        'compose_comment_body "$1" "$2" "$3" "$4"'
     )
     r = subprocess.run(
-        ["bash", "-c", script, "bash", reply, verdict, downgraded],
+        ["bash", "-c", script, "bash", reply, verdict, downgraded, withheld],
         capture_output=True,
         text=True,
         timeout=30,
@@ -86,6 +86,28 @@ def test_downgrade_drops_do_reply_for_honest_fallback():
     assert "acceptance criteria" in out, out
     assert "Maintainer controls" in out, out
     assert "<!-- olympus-triage:needs_info -->" in out, out
+
+
+def test_do_withheld_recommends_instead_of_queuing():
+    # verdict=do, but dispatch withheld (untrusted author). The agent's
+    # queued-promise reply must be dropped for an honest "flagged a maintainer"
+    # message, with the maintainer-controls block and a distinct marker.
+    do_reply = "Reproduced it, it's queued and I'm on it now!"
+    out = compose(do_reply, "do", withheld="1")
+    assert do_reply not in out, "queued promise must be dropped when dispatch is withheld\n" + out
+    assert "maintainer" in out.lower(), out
+    assert "Maintainer controls" in out, out
+    assert "`agent:try`" in out, out
+    assert "<!-- olympus-triage:do-withheld -->" in out, out
+
+
+def test_do_dispatched_is_unchanged():
+    # The default do path (withheld=0) is untouched: reply verbatim, no controls.
+    reply = "Reproduced it — I'm on it!"
+    out = compose(reply, "do")
+    assert reply in out, out
+    assert "Maintainer controls" not in out, out
+    assert "<!-- olympus-triage:do -->" in out, out
 
 
 def test_empty_reply_falls_back():

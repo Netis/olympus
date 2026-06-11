@@ -65,6 +65,10 @@ olympus_load_config() {
   export OLYMPUS_CONTAINED="$(_olc_get '(.triage.gates.contained_areas | join(", "))' 'one module, docs, or one workflow' OLYMPUS_CONTAINED)"
   export OLYMPUS_TEST_HINT="$(_olc_get '.triage.gates.test_hint' 'a unit / integration test' OLYMPUS_TEST_HINT)"
   export OLYMPUS_LANGUAGE="$(_olc_get '.triage.language' 'auto' OLYMPUS_LANGUAGE)"
+  # When a verdict=do issue may AUTO-dispatch the unattended dev agent:
+  # trusted (default) = only authors with write+ access; all = any author
+  # (internal repos); never = always require a maintainer to add the try-label.
+  export OLYMPUS_AUTO_DISPATCH="$(_olc_get '.triage.auto_dispatch' 'trusted' OLYMPUS_AUTO_DISPATCH)"
 
   # --- implement (dev agent) ---
   export OLYMPUS_BUILD_CMD="$(_olc_get '.implement.build_cmd' '' OLYMPUS_BUILD_CMD)"

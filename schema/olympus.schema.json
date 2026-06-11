@@ -47,7 +47,8 @@
             "test_hint": { "type": "string", "description": "What a deterministic test looks like in this repo (e.g. 'cargo test', 'pytest')." }
           }
         },
-        "language": { "type": "string", "default": "auto", "description": "Reply language. 'auto' = match the reporter; otherwise a fixed language code/name (e.g. 'en', 'zh')." }
+        "language": { "type": "string", "default": "auto", "description": "Reply language. 'auto' = match the reporter; otherwise a fixed language code/name (e.g. 'en', 'zh')." },
+        "auto_dispatch": { "enum": ["trusted", "all", "never"], "default": "trusted", "description": "When a verdict=do issue may auto-dispatch the unattended dev agent. 'trusted' (default) = only issue authors with write/maintain/admin access; others get a warm reply + a maintainer control to dispatch by hand (human-in-the-loop against injected issue text on public repos). 'all' = auto-dispatch any author (internal/trusted repos). 'never' = always require a maintainer to add the try-label." }
       }
     },
     "implement": {
