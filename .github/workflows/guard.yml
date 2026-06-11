@@ -17,6 +17,9 @@ name: olympus-guard
 on:
   workflow_call:
     inputs:
+      olympus_repo:
+        type: string
+        default: Netis/olympus
       olympus_ref:
         type: string
         default: main
@@ -37,7 +40,7 @@ jobs:
       - name: Fetch olympus scripts
         uses: actions/checkout@v4
         with:
-          repository: Netis/olympus
+          repository: ${{ inputs.olympus_repo }}
           ref: ${{ inputs.olympus_ref }}
           token: ${{ secrets.AGENT_GH_TOKEN || github.token }}
           path: _agentops

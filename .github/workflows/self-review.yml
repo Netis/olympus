@@ -27,6 +27,8 @@ jobs:
     if: ${{ vars.SELF_DOGFOOD_ENABLED == 'true' }}
     uses: ./.github/workflows/review.yml
     with:
+      olympus_repo: ${{ github.repository }}
+      olympus_ref: ${{ github.sha }}
       runner_labels: '["self-hosted","olympus"]'
       pr_number: ${{ inputs.pr_number }}
     secrets: inherit

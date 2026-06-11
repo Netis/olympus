@@ -25,6 +25,8 @@ jobs:
     if: ${{ vars.SELF_DOGFOOD_ENABLED == 'true' }}
     uses: ./.github/workflows/revise.yml
     with:
+      olympus_repo: ${{ github.repository }}
+      olympus_ref: ${{ github.sha }}
       pr_number: ${{ inputs.pr_number }}
       runner_labels: '["self-hosted","olympus"]'
     secrets: inherit

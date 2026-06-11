@@ -18,5 +18,7 @@ jobs:
     if: ${{ vars.SELF_DOGFOOD_ENABLED == 'true' && github.event.label.name == 'agent:try' }}
     uses: ./.github/workflows/implement.yml
     with:
+      olympus_repo: ${{ github.repository }}
+      olympus_ref: ${{ github.sha }}
       runner_labels: '["self-hosted","olympus"]'
     secrets: inherit
