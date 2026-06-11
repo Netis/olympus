@@ -54,7 +54,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "build_cmd": { "type": "string", "description": "The build + test command the dev agent must get green before opening a PR (e.g. 'make build && make test')." }
+        "build_cmd": { "type": "string", "description": "The build + test command the dev agent must get green before opening a PR (e.g. 'make build && make test')." },
+        "allow_network": { "type": "boolean", "default": false, "description": "Let the implement/revise agent use network commands (curl/wget/ssh/...). Default false: the claude harness denies direct network egress so a prompt-injected issue can't exfiltrate. Not a full sandbox — indirect egress needs OS-level isolation; see docs/security.md." }
       }
     },
     "observer": {
