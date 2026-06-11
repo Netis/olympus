@@ -1,6 +1,6 @@
-# agent-ops eats its own dog food
+# Olympus eats its own dog food
 
-agent-ops is the mechanism repo, but it can also be a **consumer of itself** —
+Olympus is the mechanism repo, but it can also be a **consumer of itself** —
 the ultimate validation that the multi-repo loop works. This documents what's
 active now and how to activate the rest.
 
@@ -8,12 +8,12 @@ active now and how to activate the rest.
 
 - **`self-guard.yml`** — runs this repo's own `guard.yml` leakage gate on every
   PR + main push. GitHub-hosted ubuntu, no secrets, no runner. This is the first
-  real bite of dog food: a leak in agent-ops's own tracked files (or a
+  real bite of dog food: a leak in Olympus's own tracked files (or a
   mis-scoped `scripts/lint/leakage-allowlist.txt`) fails the PR.
 - **`ci.yml`** — the pre-existing shellcheck self-CI (unchanged).
-- **`.agent-ops.json`** — agent-ops's own policy (gates, labels, the
-  shellcheck+pytest `build_cmd` wiwi would run, review bot `vivi`, dev agent
-  `wiwi`). Read by the agentic surfaces once activated.
+- **`.olympus.json`** — Olympus's own policy (gates, labels, the
+  shellcheck+pytest `build_cmd` hephaestus would run, review bot `themis`, dev agent
+  `hephaestus`). Read by the agentic surfaces once activated.
 
 ## What's dormant (wired, awaiting infra)
 
@@ -23,24 +23,24 @@ it's `true`, they fire on the matching event but the job is **skipped** (a grey
 check — never a red failure). They use `uses: ./...` so they always run the
 current branch's reusable workflows + scripts.
 
-`observe` (mara) is **N/A** for agent-ops: it has no deployed prod service to
-poll. `.agent-ops.json`'s `observer.health_url` is intentionally empty.
+`observe` (argus) is **N/A** for Olympus: it has no deployed prod service to
+poll. `.olympus.json`'s `observer.health_url` is intentionally empty.
 
 ## Activation (when you're ready)
 
-1. **Provision a self-hosted runner** labelled `self-hosted,agent-ops` with the
+1. **Provision a self-hosted runner** labelled `self-hosted,olympus` with the
    `claude` CLI + `jq` + `python3`, reaching the model gateway. (Or change the
    `runner_labels` in the four `self-*.yml` wrappers to an existing shared label,
    e.g. `["self-hosted","heron"]`, if that runner is reachable from this repo.)
-2. **Provision secrets** on `Netis/agent-ops` (Settings → Secrets):
+2. **Provision secrets** on `Netis/olympus` (Settings → Secrets):
    `LITELLM_BASE_URL`, `LITELLM_API_KEY`, `LITELLM_NO_PROXY` (optional),
    `AGENT_GH_TOKEN` (a **PAT**, not `GITHUB_TOKEN` — the loop needs to trigger
    label/dispatch/push events), and optionally `AUTO_MERGE_TEAM`.
 3. **Flip the flag**: `gh variable set SELF_DOGFOOD_ENABLED --body true
-   --repo Netis/agent-ops`. No file change needed; the wrappers stop skipping.
+   --repo Netis/olympus`. No file change needed; the wrappers stop skipping.
 4. (For `self-revise`) the review loop dispatches the revise workflow by
    filename. Either rename `self-revise.yml` → `pr-revise.yml`, or set
-   `AGENT_OPS_REVISE_WORKFLOW=self-revise.yml` in the runner environment.
+   `OLYMPUS_REVISE_WORKFLOW=self-revise.yml` in the runner environment.
 
 To pause again, set the variable to anything but `true` (or delete it).
 

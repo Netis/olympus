@@ -1,6 +1,6 @@
 # Prerequisites
 
-agent-ops runs LLM agents on **your** infrastructure. Before onboarding a repo,
+Olympus runs LLM agents on **your** infrastructure. Before onboarding a repo,
 have these in place — most are set once per org and shared.
 
 ## 1. A self-hosted runner the agents can use
@@ -34,7 +34,7 @@ Set once at the org and grant the repos that onboard, or set per-repo.
 ## 3. Why `AGENT_GH_TOKEN` must be a PAT (not `GITHUB_TOKEN`)
 
 GitHub deliberately **suppresses workflow-triggering events emitted under the
-default `GITHUB_TOKEN`** to prevent recursive workflow storms. The agent-ops
+default `GITHUB_TOKEN`** to prevent recursive workflow storms. The Olympus
 loop depends on exactly those events:
 
 - triage adds `agent:try` → that `labeled` event must start the implement job;
@@ -44,15 +44,15 @@ loop depends on exactly those events:
 All of these are no-ops under `GITHUB_TOKEN`. So they run under
 `AGENT_GH_TOKEN`, a PAT owned by a real user (or a machine account) with
 `repo` + `workflow` scope. The same token is used to admin-merge (it needs
-branch-protection bypass) and to clone `Netis/agent-ops` if you keep it private.
+branch-protection bypass) and to clone `Netis/olympus` if you keep it private.
 
 > This is the single most common onboarding failure. If "nothing happens" after
 > triage labels an issue, check that `AGENT_GH_TOKEN` is set and is a PAT.
 
-## 4. Keep agent-ops reachable to the runner
+## 4. Keep Olympus reachable to the runner
 
-The reusable workflows `git clone` `Netis/agent-ops` at the pinned ref to get
-the scripts. If you keep agent-ops **public**, nothing extra is needed (it holds
+The reusable workflows `git clone` `Netis/olympus` at the pinned ref to get
+the scripts. If you keep Olympus **public**, nothing extra is needed (it holds
 no secrets — all infra lives in the consumer's secrets). If **private**, the
 checkout uses `AGENT_GH_TOKEN`, which must have read access.
 

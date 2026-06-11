@@ -1,16 +1,16 @@
 # Setup — onboarding a repo
 
-A walkthrough of putting agent-ops on a repo. Assumes the
+A walkthrough of putting Olympus on a repo. Assumes the
 [prerequisites](prerequisites.md) (runner + secrets) are in place.
 
-## 1. Add `.agent-ops.json`
+## 1. Add `.olympus.json`
 
-Copy [`examples/consumer/.agent-ops.json`](../examples/consumer/.agent-ops.json)
+Copy [`examples/consumer/.olympus.json`](../examples/consumer/.olympus.json)
 to the repo root and edit it. Minimum useful config:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/Netis/agent-ops/main/schema/agent-ops.schema.json",
+  "$schema": "https://raw.githubusercontent.com/Netis/olympus/main/schema/olympus.schema.json",
   "project": { "name": "my-service", "default_branch": "main" },
   "triage": {
     "gates": {
@@ -40,12 +40,12 @@ into your repo's `.github/workflows/`:
 | `observe.yml` | schedule (prod repos only) | self-hosted runner |
 
 Edit each wrapper's `runner_labels` to match your pool, and keep both the
-`uses: ...@v0.2.0` and `agent_ops_ref: v0.2.0` on the **same** release.
+`uses: ...@v0.2.0` and `olympus_ref: v0.2.0` on the **same** release.
 
 > `pr-review.yml` keys off a workflow named **`ci`** completing. If your CI
 > workflow has a different name, change `workflows: [ci]` in the wrapper.
 > `pr-revise.yml` **must** be named `pr-revise.yml` (the dispatch target) unless
-> you set `AGENT_OPS_REVISE_WORKFLOW`.
+> you set `OLYMPUS_REVISE_WORKFLOW`.
 
 ## 3. Set permissions on the wrappers
 
@@ -60,7 +60,7 @@ workflows inherit the caller's permissions, so these matter:
 
 ## 4. Create the labels
 
-Create the four labels (or your renamed equivalents from `.agent-ops.json`):
+Create the four labels (or your renamed equivalents from `.olympus.json`):
 `agent:assess`, `agent:try`, `agent:skip`, `auto-agent`. The agents add/read
 them; GitHub won't auto-create a missing label.
 
@@ -75,5 +75,5 @@ them; GitHub won't auto-create a missing label.
 
 ## 6. Upgrading later
 
-Bump the tag in **all** wrappers (`@vNEXT` + `agent_ops_ref: vNEXT`) in one PR.
-The mechanism updates for the whole repo at once; your `.agent-ops.json` stays.
+Bump the tag in **all** wrappers (`@vNEXT` + `olympus_ref: vNEXT`) in one PR.
+The mechanism updates for the whole repo at once; your `.olympus.json` stays.

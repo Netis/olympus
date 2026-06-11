@@ -1,4 +1,4 @@
-# Cookbook: agent-ops runner on AWS (EC2)
+# Cookbook: Olympus runner on AWS (EC2)
 
 Run the runner on an EC2 instance — good if your org already lives in AWS, your
 model gateway is in a VPC, or you want spot/auto-stop cost controls.
@@ -27,10 +27,10 @@ aws ec2 run-instances \
   --key-name <your-keypair> \
   --security-group-ids <sg-id> \
   --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=30,VolumeType=gp3}' \
-  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=agent-ops-runner}]'
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=olympus-runner}]'
 
 # get the public IP (or use SSM Session Manager and skip SSH/inbound entirely)
-aws ec2 describe-instances --filters Name=tag:Name,Values=agent-ops-runner \
+aws ec2 describe-instances --filters Name=tag:Name,Values=olympus-runner \
   --query 'Reservations[].Instances[].PublicIpAddress' --output text
 ssh ubuntu@<PUBLIC_IP>
 ```
@@ -68,7 +68,7 @@ boot via an instance role with GitHub App credentials.
 ## 4. Bring it online
 
 Continue with **Steps A–D** in [`./README.md`](./README.md): bootstrap the
-instance, register the runner (label `self-hosted,agent-ops`), set the secrets,
+instance, register the runner (label `self-hosted,olympus`), set the secrets,
 smoke-test.
 
 ## Pros / cons
