@@ -1,4 +1,4 @@
-name: agent-ops-review
+name: olympus-review
 
 # Reusable PR-review workflow (the review bot). Fires after the consumer's CI
 # succeeds on a PR, reviews the diff, posts a structured review, then — for
@@ -12,19 +12,19 @@ name: agent-ops-review
 #     workflow_dispatch: { inputs: { pr_number: { required: true, type: number } } }
 #   jobs:
 #     review:
-#       uses: Netis/agent-ops/.github/workflows/review.yml@v0.1.0
+#       uses: Netis/olympus/.github/workflows/review.yml@v0.1.0
 #       permissions: { contents: write, issues: write, pull-requests: write, statuses: read }
 #       with:
 #         runner_labels: '["self-hosted","my-runner"]'
 #       secrets: inherit
 #
 # The review bot's identity, the auto-agent label, and the default branch all
-# come from the consumer's .agent-ops.json.
+# come from the consumer's .olympus.json.
 
 on:
   workflow_call:
     inputs:
-      agent_ops_ref:
+      olympus_ref:
         type: string
         default: main
       runner_labels:
@@ -32,7 +32,7 @@ on:
         default: '["self-hosted"]'
       config_path:
         type: string
-        default: .agent-ops.json
+        default: .olympus.json
       model:
         type: string
         default: claude-3-5-sonnet-20241022
@@ -57,7 +57,7 @@ on:
       AUTO_MERGE_TEAM:  { required: false }
 
 concurrency:
-  group: agent-ops-review-${{ github.event.workflow_run.pull_requests[0].number || inputs.pr_number }}
+  group: olympus-review-${{ github.event.workflow_run.pull_requests[0].number || inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
@@ -111,18 +111,18 @@ jobs:
       - name: Fetch base for diff
         run: git fetch origin "${{ steps.pr.outputs.base_ref }}" --depth 200
 
-      - name: Fetch agent-ops scripts
+      - name: Fetch olympus scripts
         uses: actions/checkout@v4
         with:
-          repository: Netis/agent-ops
-          ref: ${{ inputs.agent_ops_ref }}
+          repository: Netis/olympus
+          ref: ${{ inputs.olympus_ref }}
           token: ${{ secrets.AGENT_GH_TOKEN }}
           path: _agentops
 
       - name: Run review agent
         id: review
         env:
-          AGENT_OPS_CONFIG: ${{ inputs.config_path }}
+          OLYMPUS_CONFIG: ${{ inputs.config_path }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
         run: bash _agentops/scripts/pr-review/run_review.sh "$PR_NUMBER"
@@ -140,7 +140,7 @@ jobs:
       - name: Auto-merge if eligible
         if: ${{ steps.review.outcome == 'success' }}
         env:
-          AGENT_OPS_CONFIG: ${{ inputs.config_path }}
+          OLYMPUS_CONFIG: ${{ inputs.config_path }}
           GH_TOKEN:  ${{ secrets.AGENT_GH_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
           AUTO_MERGE_TEAM: ${{ secrets.AUTO_MERGE_TEAM }}
@@ -149,7 +149,7 @@ jobs:
       - name: Dispatch revise if changes requested
         if: ${{ steps.review.outcome == 'success' }}
         env:
-          AGENT_OPS_CONFIG: ${{ inputs.config_path }}
+          OLYMPUS_CONFIG: ${{ inputs.config_path }}
           GH_TOKEN:  ${{ secrets.AGENT_GH_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
         run: bash _agentops/scripts/agent-bot/revise_dispatch.sh

@@ -15,11 +15,11 @@ set -euo pipefail
 PR_NUMBER="${1:?usage: $0 <pr_number>}"
 WORKDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Load .agent-ops.json so the configured harness (harness.kind) + model land in
+# Load .olympus.json so the configured harness (harness.kind) + model land in
 # the env before the agent runs. No config ⇒ claude (back-compatible).
 # shellcheck source=../lib/config.sh
 source "$(cd "$WORKDIR/../lib" && pwd)/config.sh"
-agent_ops_load_config
+olympus_load_config
 
 OUT="/tmp/pr-review-${PR_NUMBER}-out.md"
 LOG="/tmp/pr-review-${PR_NUMBER}-agent.log"
@@ -56,7 +56,7 @@ envsubst < "$WORKDIR/prompt.md" > "$PROMPT"
 
 # Source the harness adapter — it sources litellm-wait.sh and owns the gateway
 # pre-flight wait + the retry-on-gateway-down loop. The CLI is the consumer's
-# .agent-ops.json harness.kind (default: claude).
+# .olympus.json harness.kind (default: claude).
 # shellcheck source=../lib/agent-harness.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/agent-harness.sh"
 
@@ -76,7 +76,7 @@ ALLOWED_TOOLS="$(grep -v '^#' "$WORKDIR/allowed_tools.txt" \
 claude_rc=0
 agent_run --profile review --prompt "$PROMPT" --out "$OUT" --errlog "$LOG" \
   --tools "$ALLOWED_TOOLS" --max-turns 60 --timeout 7200 \
-  --output-format text --permission-mode acceptEdits --label vivi || claude_rc=$?
+  --output-format text --permission-mode acceptEdits --label themis || claude_rc=$?
 
 if [ "$claude_rc" -ne 0 ]; then
     echo "ERROR: agent exited with code $claude_rc" >> "$LOG"

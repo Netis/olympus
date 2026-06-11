@@ -1,16 +1,16 @@
-name: agent-ops-revise
+name: olympus-revise
 
 # Reusable revision workflow. Dispatched (by the review workflow's
 # revise_dispatch step) when the review bot requests changes on an auto-agent
 # PR. The consumer hosts a thin wrapper named `pr-revise.yml` so the dispatch
-# target resolves (override via the AGENT_OPS_REVISE_WORKFLOW env if you name it
+# target resolves (override via the OLYMPUS_REVISE_WORKFLOW env if you name it
 # differently):
 #
 #   name: pr-revise
 #   on: { workflow_dispatch: { inputs: { pr_number: { required: true } } } }
 #   jobs:
 #     revise:
-#       uses: Netis/agent-ops/.github/workflows/revise.yml@v0.1.0
+#       uses: Netis/olympus/.github/workflows/revise.yml@v0.1.0
 #       permissions: { contents: write, pull-requests: write }
 #       with:
 #         pr_number: ${{ inputs.pr_number }}
@@ -23,7 +23,7 @@ on:
       pr_number:
         type: string
         required: true
-      agent_ops_ref:
+      olympus_ref:
         type: string
         default: main
       runner_labels:
@@ -31,7 +31,7 @@ on:
         default: '["self-hosted"]'
       config_path:
         type: string
-        default: .agent-ops.json
+        default: .olympus.json
       model:
         type: string
         default: claude-3-5-sonnet-20241022
@@ -45,7 +45,7 @@ on:
       AGENT_GH_TOKEN:   { required: true }
 
 concurrency:
-  group: agent-ops-revise-${{ inputs.pr_number }}
+  group: olympus-revise-${{ inputs.pr_number }}
   cancel-in-progress: true
 
 jobs:
@@ -76,17 +76,17 @@ jobs:
           GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
         run: gh pr checkout "${{ inputs.pr_number }}"
 
-      - name: Fetch agent-ops scripts
+      - name: Fetch olympus scripts
         uses: actions/checkout@v4
         with:
-          repository: Netis/agent-ops
-          ref: ${{ inputs.agent_ops_ref }}
+          repository: Netis/olympus
+          ref: ${{ inputs.olympus_ref }}
           token: ${{ secrets.AGENT_GH_TOKEN }}
           path: _agentops
 
       - name: Revise
         env:
-          AGENT_OPS_CONFIG: ${{ inputs.config_path }}
+          OLYMPUS_CONFIG: ${{ inputs.config_path }}
           PR_NUMBER: ${{ inputs.pr_number }}
           GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
         run: bash _agentops/scripts/agent-bot/run_revise.sh

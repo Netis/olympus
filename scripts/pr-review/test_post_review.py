@@ -169,6 +169,32 @@ def test_pick_event_comment_explicit():
     assert post_review.pick_event(body) == "COMMENT"
 
 
+def test_build_footer_uses_env_review_bot():
+    """Footer attribution is config-driven, never hardcoded."""
+    prev = os.environ.get("OLYMPUS_REVIEW_BOT_LOGIN")
+    os.environ["OLYMPUS_REVIEW_BOT_LOGIN"] = "athena"
+    try:
+        footer = post_review.build_footer("http://run/1")
+        assert "Reviewed by **athena**" in footer, footer
+        assert "http://run/1" in footer, footer
+    finally:
+        if prev is None:
+            del os.environ["OLYMPUS_REVIEW_BOT_LOGIN"]
+        else:
+            os.environ["OLYMPUS_REVIEW_BOT_LOGIN"] = prev
+
+
+def test_build_footer_falls_back_without_env():
+    """Absent config → a neutral label, never a stale hardcoded name."""
+    prev = os.environ.pop("OLYMPUS_REVIEW_BOT_LOGIN", None)
+    try:
+        footer = post_review.build_footer("http://run/2")
+        assert "Reviewed by **the review bot**" in footer, footer
+    finally:
+        if prev is not None:
+            os.environ["OLYMPUS_REVIEW_BOT_LOGIN"] = prev
+
+
 if __name__ == "__main__":
     import traceback
     failed = 0

@@ -1,7 +1,7 @@
-name: agent-ops-guard
+name: olympus-guard
 
 # Reusable hygiene gate. No LLM, no self-hosted runner — pure linters that
-# catch the mechanical PR failure classes agent-ops was built around:
+# catch the mechanical PR failure classes olympus was built around:
 #   - leakage : no private IP / key material / machine path in tracked files
 #   - secrets : every referenced GitHub secret is actually provisioned
 #   - secret-values : provisioned secret values are sane (non-empty, not "-")
@@ -9,7 +9,7 @@ name: agent-ops-guard
 # Consumer wrapper (triggers on pull_request + push):
 #   jobs:
 #     guard:
-#       uses: Netis/agent-ops/.github/workflows/guard.yml@v0.1.0
+#       uses: Netis/olympus/.github/workflows/guard.yml@v0.1.0
 #       secrets: inherit          # only needed if check-secrets queries the API
 #
 # Runs on GitHub-hosted ubuntu; safe for fork PRs (read-only).
@@ -17,7 +17,7 @@ name: agent-ops-guard
 on:
   workflow_call:
     inputs:
-      agent_ops_ref:
+      olympus_ref:
         type: string
         default: main
       run_secret_checks:
@@ -34,11 +34,11 @@ jobs:
       - name: Checkout consumer repo
         uses: actions/checkout@v4
 
-      - name: Fetch agent-ops scripts
+      - name: Fetch olympus scripts
         uses: actions/checkout@v4
         with:
-          repository: Netis/agent-ops
-          ref: ${{ inputs.agent_ops_ref }}
+          repository: Netis/olympus
+          ref: ${{ inputs.olympus_ref }}
           token: ${{ secrets.AGENT_GH_TOKEN || github.token }}
           path: _agentops
 

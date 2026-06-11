@@ -128,7 +128,7 @@ wait_for_litellm() {
 #
 # CLAUDE_RETRY_MAX is per-caller; default 2 in the agent scripts
 # (giving 3 attempts total). The retry restarts claude from scratch
-# — for stateful agents (wiwi) any work already committed to the
+# — for stateful agents (hephaestus) any work already committed to the
 # branch is preserved by virtue of being on disk; in-flight, not-yet
 # -committed work is lost. That's an acceptable trade because the
 # alternative (no retry) loses the whole run anyway.

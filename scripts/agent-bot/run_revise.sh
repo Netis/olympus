@@ -1,31 +1,31 @@
 #!/usr/bin/env bash
-# wiwi REVISION pass. Dispatched (via pr-revise.yml) when vivi posts a
-# CHANGES_REQUESTED review on a wiwi PR (label `auto-agent`). Runs inside a
-# checkout of the PR head branch, feeds vivi's blocking feedback + the diff
+# hephaestus REVISION pass. Dispatched (via pr-revise.yml) when themis posts a
+# CHANGES_REQUESTED review on a hephaestus PR (label `auto-agent`). Runs inside a
+# checkout of the PR head branch, feeds themis's blocking feedback + the diff
 # to claude, ensures the build is green, then commits + pushes back — which
-# re-triggers ci → pr-review (vivi re-review). Mirrors run_wiwi.sh's
+# re-triggers ci → pr-review (themis re-review). Mirrors run_hephaestus.sh's
 # LiteLLM-wait + claude-retry plumbing so the two agents behave identically
 # under a flaky backend.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-# Load .agent-ops.json → AGENT_OPS_* (review-bot login, dev-agent name).
+# Load .olympus.json → OLYMPUS_* (review-bot login, dev-agent name).
 # shellcheck source=scripts/lib/config.sh
 source "$HERE/../lib/config.sh"
-agent_ops_load_config
+olympus_load_config
 PR="${PR_NUMBER:?PR_NUMBER required}"
 REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY required}"
 
 git config user.email "agent-bot@noreply.local"
-git config user.name  "$AGENT_OPS_DEV_AGENT_NAME"
+git config user.name  "$OLYMPUS_DEV_AGENT_NAME"
 
-# --- gather vivi's feedback + the diff for the prompt ---------------------
-# Latest CHANGES_REQUESTED review body. Identify vivi the same way
-# auto_merge.sh does (author login OR the vivi footer), so attribution
+# --- gather themis's feedback + the diff for the prompt ---------------------
+# Latest CHANGES_REQUESTED review body. Identify themis the same way
+# auto_merge.sh does (author login OR the themis footer), so attribution
 # quirks between bot accounts don't drop the review.
 REVIEW_BODY=$(gh api "repos/$REPO/pulls/$PR/reviews" --jq '
   [ .[]
-    | select(.user.login==env.AGENT_OPS_REVIEW_BOT_LOGIN or ((.body // "") | contains(env.AGENT_OPS_REVIEW_BOT_LOGIN)))
+    | select(.user.login==env.OLYMPUS_REVIEW_BOT_LOGIN or ((.body // "") | contains(env.OLYMPUS_REVIEW_BOT_LOGIN)))
     | select(.state=="CHANGES_REQUESTED") ]
   | last | .body // ""' 2>/dev/null || true)
 
@@ -44,11 +44,11 @@ fi
 
 PROMPT=$(mktemp)
 cat > "$PROMPT" <<EOF
-You are **wiwi**, the dev agent, doing a REVISION pass on PR #${PR}. The
-reviewer **vivi** requested changes. The PR's head branch is already checked
+You are **hephaestus**, the dev agent, doing a REVISION pass on PR #${PR}. The
+reviewer **themis** requested changes. The PR's head branch is already checked
 out in the current working tree. Address the review here. Constraints:
 
-- Fix EVERY **Blocking** item vivi listed. Apply Suggestions where they are
+- Fix EVERY **Blocking** item themis listed. Apply Suggestions where they are
   cheap and clearly correct; if you deliberately skip one, say why in the
   commit message. Don't argue with the review — change the code (or, when the
   reviewer is factually wrong, fix the misleading code/comment that led them
@@ -66,10 +66,10 @@ out in the current working tree. Address the review here. Constraints:
   \`git status\` shows uncommitted edits when you start, treat them as your
   starting point: read the diffs, build, continue — do not redo work.
 - If you cannot satisfy a blocking item without exceeding the PR's scope,
-  STOP, write the reason to /tmp/wiwi-revise-abort.txt, and exit non-zero so
+  STOP, write the reason to /tmp/hephaestus-revise-abort.txt, and exit non-zero so
   a human can take over.
 
-=== vivi's review (CHANGES_REQUESTED) ===
+=== themis's review (CHANGES_REQUESTED) ===
 ${REVIEW_BODY}
 
 === inline review comments ===
@@ -81,21 +81,21 @@ EOF
 
 # Run the configured agent harness (default: claude) on the revise prompt,
 # streaming to both the workflow log and a file. agent-harness.sh owns the
-# gateway pre-flight wait + retry-on-gateway-down loop (same policy as run_wiwi.sh);
-# which CLI runs is .agent-ops.json's harness.kind.
+# gateway pre-flight wait + retry-on-gateway-down loop (same policy as run_hephaestus.sh);
+# which CLI runs is .olympus.json's harness.kind.
 # shellcheck source=../lib/agent-harness.sh
 source "$(cd "$HERE/../lib" && pwd)/agent-harness.sh"
 claude_exit=0
-agent_run --profile implement --prompt "$PROMPT" --stream /tmp/wiwi-revise-run.log --label "wiwi revise" || claude_exit=$?
+agent_run --profile implement --prompt "$PROMPT" --stream /tmp/hephaestus-revise-run.log --label "hephaestus revise" || claude_exit=$?
 
 if [ "$claude_exit" != "0" ]; then
-  echo "wiwi revise failed (claude exit=$claude_exit; see /tmp/wiwi-revise-run.log)" >&2
-  gh pr comment "$PR" --body "🤖 wiwi could not complete the revision (see workflow log). Leaving vivi's review for a human."
+  echo "hephaestus revise failed (claude exit=$claude_exit; see /tmp/hephaestus-revise-run.log)" >&2
+  gh pr comment "$PR" --body "🤖 hephaestus could not complete the revision (see workflow log). Leaving themis's review for a human."
   exit 1
 fi
 
-if [ -f /tmp/wiwi-revise-abort.txt ]; then
-  gh pr comment "$PR" --body "🤖 wiwi paused the revision: $(cat /tmp/wiwi-revise-abort.txt)"
+if [ -f /tmp/hephaestus-revise-abort.txt ]; then
+  gh pr comment "$PR" --body "🤖 hephaestus paused the revision: $(cat /tmp/hephaestus-revise-abort.txt)"
   exit 0
 fi
 
@@ -103,9 +103,9 @@ fi
 # run isn't lost to workspace cleanup.
 if ! git diff --quiet || ! git diff --cached --quiet || \
    [ -n "$(git ls-files --others --exclude-standard)" ]; then
-  echo "wiwi revise: auto-committing leftover edits (fallback)" >&2
+  echo "hephaestus revise: auto-committing leftover edits (fallback)" >&2
   git add -A
-  git commit -m "wiwi: revision for PR #${PR} (auto-commit fallback)" \
+  git commit -m "hephaestus: revision for PR #${PR} (auto-commit fallback)" \
              -m "claude finished the revision without committing; this captures the working-tree state so the review feedback isn't lost. Reviewer: squash/reword as needed."
 fi
 
@@ -114,10 +114,10 @@ fi
 # its upstream (origin/<branch>); equal ⇒ no new commit this pass.
 upstream=$(git rev-parse '@{u}' 2>/dev/null || echo none)
 if [ "$(git rev-parse HEAD)" = "$upstream" ]; then
-  echo "wiwi revise: no new commits; nothing to push" >&2
-  gh pr comment "$PR" --body "🤖 wiwi made no changes on this revision pass — vivi's feedback may need a human. Pausing the loop."
+  echo "hephaestus revise: no new commits; nothing to push" >&2
+  gh pr comment "$PR" --body "🤖 hephaestus made no changes on this revision pass — themis's feedback may need a human. Pausing the loop."
   exit 0
 fi
 
 git push
-gh pr comment "$PR" --body "🤖 **wiwi** pushed a revision addressing vivi's review. CI + re-review run automatically."
+gh pr comment "$PR" --body "🤖 **hephaestus** pushed a revision addressing themis's review. CI + re-review run automatically."

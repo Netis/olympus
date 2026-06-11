@@ -1,9 +1,9 @@
 name: self-revise
 
-# agent-ops dogfooding its OWN revise surface on its OWN PRs, via a local
+# olympus dogfooding its OWN revise surface on its OWN PRs, via a local
 # reusable-workflow ref. Dispatched by self-review's revise_dispatch step
 # (`gh workflow run self-revise.yml`) — so to dogfood revise, set the
-# AGENT_OPS_REVISE_WORKFLOW env to `self-revise.yml` on the runner, or accept
+# OLYMPUS_REVISE_WORKFLOW env to `self-revise.yml` on the runner, or accept
 # the default `pr-revise.yml` and rename this file. DORMANT until
 # `SELF_DOGFOOD_ENABLED == 'true'` AND secrets + a self-hosted runner are
 # provisioned (see SELF-DOGFOOD.md).
@@ -26,5 +26,5 @@ jobs:
     uses: ./.github/workflows/revise.yml
     with:
       pr_number: ${{ inputs.pr_number }}
-      runner_labels: '["self-hosted","agent-ops"]'
+      runner_labels: '["self-hosted","olympus"]'
     secrets: inherit

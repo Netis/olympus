@@ -68,7 +68,7 @@ Drop a `tasks/<surface>/<name>/` folder with:
 
 ## Known constraint
 
-agent-ops's prompts are Claude-shaped (triage wants JSON, review wants a
+olympus's prompts are Claude-shaped (triage wants JSON, review wants a
 `### Summary` heading the live `post_review.py` parses). The eval's task prompts
 are deliberately representative/simplified to test the *capability*; a candidate
 that scores well here but formats differently may still need prompt tuning for the

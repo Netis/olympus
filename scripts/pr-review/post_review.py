@@ -192,6 +192,19 @@ def auto_merge(number: str) -> None:
         print(f"auto-merged PR #{number}")
 
 
+def build_footer(run_url, review_bot=None):
+    """Attribution footer appended to every posted review. The bot name is
+    config-driven (OLYMPUS_REVIEW_BOT_LOGIN, exported by config.sh) — never
+    hardcoded — so a consumer's renamed review bot is attributed correctly."""
+    if review_bot is None:
+        review_bot = os.environ.get("OLYMPUS_REVIEW_BOT_LOGIN", "the review bot")
+    return (
+        "\n\n---\n"
+        f"🤖 Reviewed by **{review_bot}** • "
+        f"[workflow run]({run_url})"
+    )
+
+
 def main() -> int:
     # Agent-failure path: keep failure details out of the PR entirely.
     # Operators read workflow logs for diagnostics; PR readers should
@@ -213,12 +226,7 @@ def main() -> int:
         print("agent reported pre-flight error — not posting to PR")
         return 0
 
-    footer = (
-        "\n\n---\n"
-        "🤖 Reviewed by **vivi** • "
-        f"[workflow run]({RUN_URL})"
-    )
-    full = body + footer
+    full = body + build_footer(RUN_URL)
 
     event = pick_event(body)
     print(f"posting review event={event} ({len(full)} bytes)")
@@ -236,7 +244,7 @@ def main() -> int:
     # changes by the project maintainer, but anyone else's PR
     # still gets human review.
     #
-    # PRs labelled `auto-agent` are wiwi-spawned; their auto-merge
+    # PRs labelled `auto-agent` are hephaestus-spawned; their auto-merge
     # decision is owned by scripts/agent-bot/auto_merge.sh (different
     # gates: linked-issue author, not PR author). Skip here so the
     # two paths never race on the same PR.

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Unit test for config.sh — the loader that maps a consumer's .agent-ops.json
-onto the AGENT_OPS_* / MARA_* env every agent script reads. Stdlib only.
+"""Unit test for config.sh — the loader that maps a consumer's .olympus.json
+onto the OLYMPUS_* / ARGUS_* env every agent script reads. Stdlib only.
 
     python3 scripts/agent-bot/tests/test_config.py
 
 Asserts: (1) values come through from a config file, (2) absent file → the
 built-in defaults (back-compat), (3) an already-exported env var overrides the
-file, (4) observer.* maps onto the MARA_* names mara.sh consumes.
+file, (4) observer.* maps onto the ARGUS_* names argus.sh consumes.
 
 Exit 0 = all pass, 1 = a failure.
 """
@@ -22,20 +22,20 @@ CONFIG_SH = os.path.join(os.path.dirname(os.path.dirname(HERE)), "lib", "config.
 
 def load(config_obj=None, **env_over):
     """Source config.sh against an optional config file; return the resulting
-    AGENT_OPS_* / MARA_* env as a dict."""
+    OLYMPUS_* / ARGUS_* env as a dict."""
     env = dict(os.environ)
     tmp = None
     if config_obj is not None:
         fd, tmp = tempfile.mkstemp(suffix=".json")
         with os.fdopen(fd, "w") as f:
             json.dump(config_obj, f)
-        env["AGENT_OPS_CONFIG"] = tmp
+        env["OLYMPUS_CONFIG"] = tmp
     else:
-        env["AGENT_OPS_CONFIG"] = "/definitely/nonexistent.json"
+        env["OLYMPUS_CONFIG"] = "/definitely/nonexistent.json"
     env.update(env_over)
     script = (
-        f'source "{CONFIG_SH}"; agent_ops_load_config 2>/dev/null; '
-        "env | grep -E \"^(AGENT_OPS_|MARA_)\""
+        f'source "{CONFIG_SH}"; olympus_load_config 2>/dev/null; '
+        "env | grep -E \"^(OLYMPUS_|ARGUS_)\""
     )
     r = subprocess.run(["bash", "-c", script], capture_output=True, text=True, env=env, timeout=30)
     if tmp:
@@ -52,35 +52,35 @@ def load(config_obj=None, **env_over):
 
 def test_values_from_file():
     cfg = load({"triage": {"gates": {"max_loc": 150, "contained_areas": ["pkg/", "docs/"]}}})
-    assert cfg["AGENT_OPS_MAX_LOC"] == "150", cfg.get("AGENT_OPS_MAX_LOC")
-    assert cfg["AGENT_OPS_CONTAINED"] == "pkg/, docs/", cfg.get("AGENT_OPS_CONTAINED")
+    assert cfg["OLYMPUS_MAX_LOC"] == "150", cfg.get("OLYMPUS_MAX_LOC")
+    assert cfg["OLYMPUS_CONTAINED"] == "pkg/, docs/", cfg.get("OLYMPUS_CONTAINED")
 
 
 def test_defaults_when_no_file():
     cfg = load(None)
-    assert cfg["AGENT_OPS_MAX_LOC"] == "300", cfg
-    assert cfg["AGENT_OPS_LABEL_TRY"] == "agent:try", cfg
-    assert cfg["AGENT_OPS_REVIEW_BOT_LOGIN"] == "vivi", cfg
+    assert cfg["OLYMPUS_MAX_LOC"] == "300", cfg
+    assert cfg["OLYMPUS_LABEL_TRY"] == "agent:try", cfg
+    assert cfg["OLYMPUS_REVIEW_BOT_LOGIN"] == "themis", cfg
 
 
 def test_env_overrides_file():
-    cfg = load({"triage": {"gates": {"max_loc": 150}}}, AGENT_OPS_MAX_LOC="999")
-    assert cfg["AGENT_OPS_MAX_LOC"] == "999", cfg.get("AGENT_OPS_MAX_LOC")
+    cfg = load({"triage": {"gates": {"max_loc": 150}}}, OLYMPUS_MAX_LOC="999")
+    assert cfg["OLYMPUS_MAX_LOC"] == "999", cfg.get("OLYMPUS_MAX_LOC")
 
 
-def test_observer_maps_to_mara_env():
+def test_observer_maps_to_argus_env():
     cfg = load({"observer": {"service_name": "svc-x", "repo": "Acme/svc",
                              "readiness": {"jq": ".status", "expect": "ok"}}})
-    assert cfg["MARA_SERVICE_NAME"] == "svc-x", cfg
-    assert cfg["MARA_REPO"] == "Acme/svc", cfg
-    assert cfg["MARA_READY_JQ"] == ".status", cfg
-    assert cfg["MARA_READY_EXPECT"] == "ok", cfg
+    assert cfg["ARGUS_SERVICE_NAME"] == "svc-x", cfg
+    assert cfg["ARGUS_REPO"] == "Acme/svc", cfg
+    assert cfg["ARGUS_READY_JQ"] == ".status", cfg
+    assert cfg["ARGUS_READY_EXPECT"] == "ok", cfg
 
 
 def test_custom_labels_and_bot():
     cfg = load({"agents": {"review_bot_login": "rex"}, "labels": {"try": "bot:go"}})
-    assert cfg["AGENT_OPS_REVIEW_BOT_LOGIN"] == "rex", cfg
-    assert cfg["AGENT_OPS_LABEL_TRY"] == "bot:go", cfg
+    assert cfg["OLYMPUS_REVIEW_BOT_LOGIN"] == "rex", cfg
+    assert cfg["OLYMPUS_LABEL_TRY"] == "bot:go", cfg
 
 
 def main():

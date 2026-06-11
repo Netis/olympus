@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Called from the tail of pr-review.yml AFTER vivi posts her review.
+# Called from the tail of pr-review.yml AFTER themis posts her review.
 # Auto-merges iff:
 #   - PR has label `auto-agent`
-#   - PR is not draft (wiwi may have flipped it; or the linked issue
+#   - PR is not draft (hephaestus may have flipped it; or the linked issue
 #     author was a team member and we promoted earlier — see below)
-#   - vivi's latest review state == APPROVED
+#   - themis's latest review state == APPROVED
 #   - the linked issue's author is on the auto-merge allowlist
 set -euo pipefail
 
-# Load .agent-ops.json → AGENT_OPS_* (review-bot login, labels).
+# Load .olympus.json → OLYMPUS_* (review-bot login, labels).
 # shellcheck source=scripts/lib/config.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)/config.sh"
-agent_ops_load_config
+olympus_load_config
 
 # Auto-merge allowlist (GitHub logins). Sourced from the AUTO_MERGE_TEAM env
 # (CSV or whitespace-separated), injected from a repo secret by the workflow
@@ -22,14 +22,14 @@ PR="${PR_NUMBER:?PR_NUMBER required}"
 
 meta=$(gh pr view "$PR" --json isDraft,labels,body)
 labels=$(echo "$meta" | jq -r '.labels[].name')
-echo "$labels" | grep -qx "$AGENT_OPS_LABEL_AUTO_AGENT" || { echo "not an auto-agent PR; skip"; exit 0; }
+echo "$labels" | grep -qx "$OLYMPUS_LABEL_AUTO_AGENT" || { echo "not an auto-agent PR; skip"; exit 0; }
 
 # Latest review state. Some reviews have a null .body (e.g. quick
 # APPROVE clicks without a comment); coerce to "" before contains()
 # or jq aborts the whole pipeline. The review bot is identified by login OR
 # its footer in the body (handles bot-account attribution quirks).
 state=$(gh pr view "$PR" --json reviews --jq '
-  [.reviews[] | select(.author.login==env.AGENT_OPS_REVIEW_BOT_LOGIN or ((.body // "") | contains(env.AGENT_OPS_REVIEW_BOT_LOGIN)))]
+  [.reviews[] | select(.author.login==env.OLYMPUS_REVIEW_BOT_LOGIN or ((.body // "") | contains(env.OLYMPUS_REVIEW_BOT_LOGIN)))]
   | last | .state // empty')
 [ "$state" = "APPROVED" ] || { echo "review verdict=$state; skip"; exit 0; }
 
@@ -40,7 +40,7 @@ issue=$(echo "$meta" | jq -r '.body' | grep -oE 'Closes #[0-9]+' | head -1 | tr 
 author=$(gh issue view "$issue" --json author --jq '.author.login')
 for m in $TEAM; do
   if [ "$m" = "$author" ]; then
-    echo "vivi APPROVED + author=$author ∈ TEAM → admin-merge"
+    echo "themis APPROVED + author=$author ∈ TEAM → admin-merge"
     # Lift draft (if still draft) and merge.
     gh pr ready "$PR" >/dev/null 2>&1 || true
     gh pr merge "$PR" --admin --squash --delete-branch

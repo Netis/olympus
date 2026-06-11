@@ -34,11 +34,11 @@ done
 [ -n "$label" ] || label="$harness"
 
 # Configure the harness via env (config.sh / agent-harness.sh honor env over file).
-export AGENT_OPS_HARNESS="$harness"
-[ -n "$command_tmpl" ] && export AGENT_OPS_HARNESS_CMD="$command_tmpl"
+export OLYMPUS_HARNESS="$harness"
+[ -n "$command_tmpl" ] && export OLYMPUS_HARNESS_CMD="$command_tmpl"
 [ -n "$model" ] && export ANTHROPIC_MODEL="$model"
 # A custom harness usually isn't behind an OpenAI-compatible /v1/models probe.
-[ "$harness" = "custom" ] && export AGENT_OPS_HEALTH_PROBE="${AGENT_OPS_HEALTH_PROBE:-false}"
+[ "$harness" = "custom" ] && export OLYMPUS_HEALTH_PROBE="${OLYMPUS_HEALTH_PROBE:-false}"
 # shellcheck source=scripts/lib/agent-harness.sh
 source "$REPO/scripts/lib/agent-harness.sh"
 

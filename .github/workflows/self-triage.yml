@@ -1,6 +1,6 @@
 name: self-triage
 
-# agent-ops dogfooding its OWN triage surface on its OWN issues, via a local
+# olympus dogfooding its OWN triage surface on its OWN issues, via a local
 # reusable-workflow ref (`uses: ./...`) so it always runs the current branch's
 # triage.yml + scripts.
 #
@@ -23,5 +23,5 @@ jobs:
     if: ${{ vars.SELF_DOGFOOD_ENABLED == 'true' }}
     uses: ./.github/workflows/triage.yml
     with:
-      runner_labels: '["self-hosted","agent-ops"]'
+      runner_labels: '["self-hosted","olympus"]'
     secrets: inherit
