@@ -74,6 +74,17 @@ agent_run() {
   local write; write="$(_agent_profile_write "$profile")"
   local kind="${OLYMPUS_HARNESS:-claude}"
 
+  # Least privilege for the implement/revise agent (it acts on UNTRUSTED issue
+  # text): strip GitHub/forge tokens from its subprocess. It edits code + runs
+  # builds and never calls gh itself (the driver script does), so a
+  # prompt-injected issue can't read or use the PAT. Model-gateway creds
+  # (ANTHROPIC_*) are kept — the agent needs them. Applied at exec below and
+  # surfaced in the dry-run. Triage/review keep their tokens (they DO call gh).
+  local -a env_strip=()
+  if [ "$profile" = "implement" ]; then
+    env_strip=(env -u GH_TOKEN -u GITHUB_TOKEN -u AGENT_GH_TOKEN -u ADMIN_GH_TOKEN)
+  fi
+
   # --- build the harness command --------------------------------------------
   # For the claude harness we keep a real argv array (no eval). For custom we
   # build a single shell string from the template so consumers can use pipes.
@@ -102,12 +113,25 @@ agent_run() {
       # shellcheck disable=SC2206  # deliberate word-split of the tool set
       claude_cmd+=(--allowed-tools $tool_set)
     fi
+    # Implement/revise run on untrusted issue text — deny direct network egress
+    # + remote shells unless the consumer opts in (.implement.allow_network).
+    # Deny beats the broad Bash allow (Claude evaluates deny first) and survives
+    # bash -c / && / ; / | wrappers (each subcommand is checked). NOT a full
+    # sandbox: indirect egress (a build script, `python -c` that shells out)
+    # still needs OS-level network isolation on the runner — see docs/security.md.
+    if [ "$profile" = "implement" ] && [ "${OLYMPUS_IMPLEMENT_ALLOW_NETWORK:-false}" != "true" ]; then
+      claude_cmd+=(--disallowed-tools
+        'Bash(curl:*)' 'Bash(wget:*)' 'Bash(nc:*)' 'Bash(ncat:*)' 'Bash(netcat:*)'
+        'Bash(telnet:*)' 'Bash(ssh:*)' 'Bash(scp:*)' 'Bash(sftp:*)' 'Bash(socat:*)'
+        'Bash(ftp:*)' 'mcp__*')
+    fi
   fi
 
   # --- dry run: print the command and stop ----------------------------------
   if [ "${AGENT_HARNESS_DRYRUN:-}" = "1" ]; then
-    if [ "$kind" = "custom" ]; then printf '%s\n' "$custom_cmd";
-    else printf '%s\n' "${claude_cmd[*]}"; fi
+    local _pfx=""; [ ${#env_strip[@]} -gt 0 ] && _pfx="${env_strip[*]} "
+    if [ "$kind" = "custom" ]; then printf '%s\n' "${_pfx}${custom_cmd}";
+    else printf '%s\n' "${_pfx}${claude_cmd[*]}"; fi
     return 0
   fi
 
@@ -117,17 +141,18 @@ agent_run() {
   fi
 
   # --- run with retry-on-gateway-down ---------------------------------------
-  # Optional `timeout S` prefix as a quoted array (empty array → no prefix).
-  local -a runner=()
-  [ -n "$timeout_s" ] && runner=(timeout "$timeout_s")
+  # Prefix array: the per-profile env scrub (implement) then an optional
+  # `timeout S`. Empty → no prefix.
+  local -a runner=("${env_strip[@]}")
+  [ -n "$timeout_s" ] && runner+=(timeout "$timeout_s")
   local retry_max="${CLAUDE_RETRY_MAX:-2}" attempt=0 rc=0
   while true; do
     set +e
     if [ -n "$streamlog" ]; then
       if [ "$kind" = "custom" ]; then
-        stdbuf -oL bash -c "$custom_cmd" 2>&1 | stdbuf -oL tee "$streamlog"
+        stdbuf -oL "${env_strip[@]}" bash -c "$custom_cmd" 2>&1 | stdbuf -oL tee "$streamlog"
       else
-        stdbuf -oL "${claude_cmd[@]}" < "$prompt" 2>&1 | stdbuf -oL tee "$streamlog"
+        stdbuf -oL "${env_strip[@]}" "${claude_cmd[@]}" < "$prompt" 2>&1 | stdbuf -oL tee "$streamlog"
       fi
       rc=${PIPESTATUS[0]}
     else

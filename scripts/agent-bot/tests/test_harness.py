@@ -92,6 +92,27 @@ out = dry_run('--profile investigate --prompt /tmp/p --out /tmp/o', config=cfg)
 check("model from .model", "--model claude-test-model" in out)
 os.unlink(cfg)
 
+# --- 4. implement containment: network denied + GitHub tokens stripped --------
+out = dry_run('--profile implement --prompt /tmp/p --out /tmp/o')
+check("implement denies curl by default", "--disallowed-tools" in out and "Bash(curl:*)" in out)
+check("implement denies ssh/wget/nc too",
+      all(t in out for t in ["Bash(ssh:*)", "Bash(wget:*)", "Bash(nc:*)", "mcp__*"]))
+check("implement strips GitHub tokens from the agent subprocess",
+      out.startswith("env -u GH_TOKEN -u GITHUB_TOKEN -u AGENT_GH_TOKEN -u ADMIN_GH_TOKEN"))
+
+inv = dry_run('--profile investigate --prompt /tmp/p --out /tmp/o')
+check("investigate does NOT deny network (it may WebFetch / call gh)", "--disallowed-tools" not in inv)
+check("investigate keeps its tokens (no env -u prefix)", not inv.startswith("env -u"))
+
+# .implement.allow_network = true → consumer opts back into network egress
+with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+    json.dump({"implement": {"allow_network": True}}, f)
+    cfg = f.name
+out = dry_run('--profile implement --prompt /tmp/p --out /tmp/o', config=cfg)
+check("implement allow_network=true drops the deny block", "--disallowed-tools" not in out)
+check("implement allow_network=true still strips tokens", out.startswith("env -u GH_TOKEN"))
+os.unlink(cfg)
+
 print()
 if failures:
     print(f"{len(failures)} check(s) FAILED")

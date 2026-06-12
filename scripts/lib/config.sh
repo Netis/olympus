@@ -65,9 +65,17 @@ olympus_load_config() {
   export OLYMPUS_CONTAINED="$(_olc_get '(.triage.gates.contained_areas | join(", "))' 'one module, docs, or one workflow' OLYMPUS_CONTAINED)"
   export OLYMPUS_TEST_HINT="$(_olc_get '.triage.gates.test_hint' 'a unit / integration test' OLYMPUS_TEST_HINT)"
   export OLYMPUS_LANGUAGE="$(_olc_get '.triage.language' 'auto' OLYMPUS_LANGUAGE)"
+  # When a verdict=do issue may AUTO-dispatch the unattended dev agent:
+  # trusted (default) = only authors with write+ access; all = any author
+  # (internal repos); never = always require a maintainer to add the try-label.
+  export OLYMPUS_AUTO_DISPATCH="$(_olc_get '.triage.auto_dispatch' 'trusted' OLYMPUS_AUTO_DISPATCH)"
 
   # --- implement (dev agent) ---
   export OLYMPUS_BUILD_CMD="$(_olc_get '.implement.build_cmd' '' OLYMPUS_BUILD_CMD)"
+  # Network egress for the implement/revise agent. Default false → the claude
+  # harness denies curl/wget/ssh/... (a prompt-injected issue can't exfiltrate).
+  # jq's `// empty` treats boolean false as empty, so normalise to a string.
+  export OLYMPUS_IMPLEMENT_ALLOW_NETWORK="$(_olc_get '(.implement.allow_network | if . == true then "true" else "false" end)' 'false' OLYMPUS_IMPLEMENT_ALLOW_NETWORK)"
 
   # --- model (harness.model wins over top-level .model) ---
   export ANTHROPIC_MODEL="$(_olc_get '(.harness.model // .model)' "${ANTHROPIC_MODEL:-claude-3-5-sonnet-20241022}" ANTHROPIC_MODEL)"

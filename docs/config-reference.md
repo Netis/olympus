@@ -42,10 +42,19 @@ Precedence for any value: an exported **env var** > the **config file** > the
 | `auto` (default) | Reply in the **same language the reporter used**. |
 | a code/name (`en`, `zh`, `日本語`, …) | Always reply in that language. |
 
+## `triage.auto_dispatch`
+When a `do` verdict may auto-start the **unattended** dev agent. See [security.md](security.md).
+| Value | Behavior |
+|---|---|
+| `trusted` (default) | Auto-dispatch only issues whose author has write/maintain/admin access. Others get the warm reply + a maintainer control to dispatch by hand (human-in-the-loop against injected issue text). |
+| `all` | Auto-dispatch any author. Internal/trusted repos only. |
+| `never` | Never auto-dispatch; a maintainer always adds the `try` label. |
+
 ## `implement`
 | Field | Default | Meaning |
 |---|---|---|
 | `build_cmd` | — | The build + test command the dev agent must get green before opening a PR (e.g. `make build && make test`, `cargo test`, `npm test`). |
+| `allow_network` | `false` | If `false`, the implement/revise agent's harness denies direct network egress (`curl`/`wget`/`ssh`/…) so a prompt-injected issue can't exfiltrate. Set `true` only if your build genuinely needs the agent to reach the network. Not a full sandbox — see [security.md](security.md). |
 
 ## `observer`
 | Field | Default | Meaning |
