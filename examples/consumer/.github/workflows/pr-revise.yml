@@ -17,9 +17,9 @@ permissions:
 
 jobs:
   revise:
-    uses: Netis/olympus/.github/workflows/revise.yml@v0.2.0
+    uses: Netis/olympus/.github/workflows/revise.yml@v0.4.0
     with:
       pr_number: ${{ inputs.pr_number }}
-      olympus_ref: v0.2.0
+      olympus_ref: v0.4.0
       runner_labels: '["self-hosted","my-runner"]'
     secrets: inherit

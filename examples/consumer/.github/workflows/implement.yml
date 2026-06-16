@@ -13,8 +13,8 @@ permissions:
 jobs:
   implement:
     if: ${{ github.event.label.name == 'agent:try' }}
-    uses: Netis/olympus/.github/workflows/implement.yml@v0.2.0
+    uses: Netis/olympus/.github/workflows/implement.yml@v0.4.0
     with:
-      olympus_ref: v0.2.0
+      olympus_ref: v0.4.0
       runner_labels: '["self-hosted","my-runner"]'
     secrets: inherit          # + AUTO_MERGE_TEAM (optional)
