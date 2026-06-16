@@ -5,8 +5,12 @@ This mechanism was renamed **agent-ops → Olympus**
 This page answers one question: **if your repo already uses the mechanism, what
 breaks — and what do you change?**
 
-Short answer: **a wrapper pinned to a pre-rename tag keeps working unchanged.**
-You only do the edits below when you *re-pin* to an Olympus-named release.
+Short answer: **GitHub Actions does not follow repo renames for `uses:`, so
+every consumer must change the `uses:` owner to `Netis/olympus`** — even one
+pinned to a pre-rename tag. For a pinned-tag consumer that owner edit is the
+*only* change needed (the tag travelled with the repo; keep `.agent-ops.json`
+and `agent_ops_ref`). The rest of the migration below applies only when you
+*re-pin* to an Olympus-named release.
 
 ## Impact by how you pinned
 
@@ -16,22 +20,27 @@ Netis/agent-ops/.github/workflows/<x>.yml@<ref>` in their wrapper workflows
 
 | You pinned to… | What happens after the rename | What to do |
 |---|---|---|
-| **A pre-rename tag** (`@v0.2.0`) — the documented, recommended way | **Nothing breaks.** That tag's content is frozen at the old (agent-ops-named) code, and GitHub permanently redirects the old `Netis/agent-ops` `uses:` path to `Netis/olympus`. The old code reads your old `.agent-ops.json` — fully self-consistent. | Nothing now. Migrate only when you choose to upgrade to an Olympus-named tag. |
-| **A moving ref** (`@main`, a branch) — an anti-pattern the README warns against | **Drifts on the next run.** You'll pull post-rename HEAD, whose loader looks for `.olympus.json`; your file is still `.agent-ops.json`, so config silently falls back to built-in defaults (label names, gate thresholds, bot login, build command all revert) → wrong behavior, not a clean error. | Migrate now (below), or pin to a tag. |
-| **Upgrading to an Olympus tag** (`@v0.3.0`+) | The new code expects the new names. | Do the full migration below before bumping. |
+| **A pre-rename tag** (`@v0.2.0`) — the documented, recommended way | **The `uses:` reference breaks.** GitHub Actions does **not** follow repository renames when resolving `uses:` — the run fails with `repository not found`. (git/web/API *do* redirect, which is why the reusable workflow's own inner `actions/checkout` of `Netis/agent-ops` still clones — but the outer `uses:` is resolved first, and that resolution is not redirected.) | **Change the `uses:` owner** to `Netis/olympus`, keeping the same `@tag`. The tag travelled with the repo, so `Netis/olympus@v0.2.0` is the same frozen code; keep your `.agent-ops.json` and the `agent_ops_ref` input exactly as they are. |
+| **A moving ref** (`@main`, a branch) — an anti-pattern the README warns against | The `uses:` reference breaks the same way (no rename redirect), **and** once you fix the owner you'll pull post-rename HEAD, whose loader looks for `.olympus.json`; your file is still `.agent-ops.json`, so config silently falls back to built-in defaults (label names, gate thresholds, bot login, build command all revert) → wrong behavior, not a clean error. | Repoint the owner **and** do the full migration below (or pin to a tag). |
+| **Upgrading to a post-rename Olympus tag** (a tag cut after the rebrand, once one exists) | The new code expects the new names. | Repoint the owner **and** do the full migration below before bumping. |
 
-The redirect is a courtesy, not a contract: it lapses the moment anyone creates
-a new repo at the old `Netis/agent-ops` path. Treat it as a grace period, not a
-permanent alias.
+Be precise about *which* redirect: GitHub redirects **git, web, and API** access
+from the old `Netis/agent-ops` path — that (and only that) is what keeps the
+inner `actions/checkout` working. It is a courtesy, not a contract: it lapses
+the moment anyone creates a new repo at the old path, so **never recreate
+`Netis/agent-ops`.** The Actions `uses:` resolver is **not** redirected at all,
+which is why the owner edit above is mandatory rather than optional.
 
 ## heron specifically
 
-heron is **not a consumer yet** — it still runs its own in-tree
-`scripts/agent-bot/*` + `.github/workflows/*` (the roadmap's standing dogfood
-target is to *replace* those with pinned Olympus wrappers). So the rename's
-impact on heron today is **zero**. When heron onboards as consumer #1, it
-onboards straight to the Olympus names — no migration debt. This is the whole
-point of doing the rename now, at zero live consumers.
+heron **is** consumer #1: its `.github/workflows/` wrappers delegate to the
+mechanism via pinned tags — `guard`/`implement`/`triage`/`revise` at `@v0.2.0`
+and `review` at `@v0.3.1` — plus a `.agent-ops.json` policy file. Every one of
+those tags predates the rebrand, so the rename hits heron exactly as the
+pre-rename-tag row above describes: the five `uses: Netis/agent-ops/...@tag`
+lines fail to resolve until their owner segment becomes `Netis/olympus` (same
+tags; `.agent-ops.json` and `agent_ops_ref` stay). Tracked in
+[Netis/heron#164](https://github.com/Netis/heron/issues/164).
 
 ## The mapping (when you do migrate)
 

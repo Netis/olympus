@@ -12,10 +12,11 @@
 #   2. THIS repo's own CI — a regression guard so the rename never silently
 #      leaks back in (the new label/bot/config/env names stay the only ones).
 #
-# IMPORTANT for consumers: a wrapper pinned to a PRE-rename tag (e.g. @v0.2.0)
-# keeps working *unchanged*. That tag's content is frozen and GitHub redirects
-# the old `uses:` path. You only need these edits when you re-pin to an
-# Olympus-named tag — this is an upgrade pre-flight, not a "you're broken" alarm.
+# IMPORTANT for consumers: GitHub Actions does NOT redirect `uses:` on a repo
+# rename, so a wrapper pinned to a PRE-rename tag (e.g. @v0.2.0) must still
+# change its `uses:` owner to Netis/olympus (same @tag — the tag travelled with
+# the repo). Keep `.agent-ops.json` + `agent_ops_ref` until you re-pin to an
+# Olympus-named tag, when the rest of these edits apply.
 #
 #   scripts/lint/check-legacy-naming.sh [DIR]    # default: current repo
 #
@@ -57,7 +58,7 @@ echo "olympus migration check — scanning for legacy agent-ops naming"
 # --- MUST fix before re-pinning to an Olympus-named tag --------------------
 scan MUST "Mechanism repo reference (uses:)" \
   'Netis/agent-ops' \
-  'Netis/agent-ops → Netis/olympus (GitHub redirects for now; update + re-pin to an Olympus tag)'
+  'Netis/agent-ops → Netis/olympus (Actions does NOT redirect uses: on rename — change the owner; the same @tag still works)'
 scan MUST "Version-pin workflow input" \
   'agent_ops_ref' \
   'agent_ops_ref: → olympus_ref:'

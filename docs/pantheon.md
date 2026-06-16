@@ -51,8 +51,8 @@ operate the loop.
 
 - Consumer wrapper references: `uses: Netis/agent-ops/.github/workflows/...`
   → `Netis/olympus/...` and the `agent_ops_ref` input → `olympus_ref`.
-  (GitHub redirects renamed-repo `uses:` paths, but examples and docs must
-  not rely on redirects.)
+  (GitHub Actions does **not** redirect renamed-repo `uses:` paths — a pinned
+  consumer must change the owner segment by hand; see [migration.md](migration.md).)
 - Config file `.agent-ops.json` → `.olympus.json`; schema
   `schema/agent-ops.schema.json` → `schema/olympus.schema.json`.
 - Env prefixes: `AGENT_OPS_*` → `OLYMPUS_*`; `MARA_*` → `ARGUS_*`.
@@ -83,5 +83,5 @@ self-contained PR plus one repo-settings change.
   evals checks).
 - `examples/consumer/` wrappers reference `Netis/olympus@<tag>` and
   `.olympus.json`, and a doctor run against the example passes.
-- The old repo URL redirects (GitHub-side) — verified once after the
-  settings change.
+- The old repo URL redirects (GitHub-side, for git/web/API — **not** Actions
+  `uses:`) — verified once after the settings change.
