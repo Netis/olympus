@@ -33,7 +33,7 @@ The whole point of the extraction:
 
 | | Lives in | Versioned | Example |
 |---|---|---|---|
-| **Mechanism** | this repo (`Netis/olympus`) | yes — tag `v0.2.0` | the triage gate logic, the warm-reply composer, the auto-merge gate, the observer's confirm-debounce, the hygiene linters |
+| **Mechanism** | this repo (`Netis/olympus`) | yes — tag `v0.4.0` | the triage gate logic, the warm-reply composer, the auto-merge gate, the observer's confirm-debounce, the hygiene linters |
 | **Policy** | the consumer's `.olympus.json` | with the consumer | gate thresholds, label names, build command, reply language, the review bot's login, the service health URL |
 
 Upgrade the mechanism once (bump the pinned tag) and every consuming repo
@@ -91,10 +91,10 @@ config-driven.
    field is optional ([schema](schema/olympus.schema.json)).
 3. **Add the thin wrappers** from [`examples/consumer/.github/workflows/`](examples/consumer/.github/workflows/)
    (`triage`, `implement`, `pr-review`, `pr-revise`, `guard`, `observe`). Each
-   is ~15 lines that `uses: Netis/olympus/.github/workflows/<x>.yml@v0.2.0`
+   is ~15 lines that `uses: Netis/olympus/.github/workflows/<x>.yml@v0.4.0`
    and passes your runner labels.
-4. **Pin the version**: keep the `@v0.2.0` on the `uses:` and the
-   `olympus_ref: v0.2.0` input in lockstep, so the workflow YAML and the
+4. **Pin the version**: keep the `@v0.4.0` on the `uses:` and the
+   `olympus_ref: v0.4.0` input in lockstep, so the workflow YAML and the
    scripts it clones are the same release.
 
 See [docs/setup.md](docs/setup.md) for the full walkthrough and
