@@ -5,6 +5,10 @@ name: triage
 on:
   issues:
     types: [opened, labeled]
+  # New reporter/maintainer comments drive the multi-round triage discussion.
+  # (issue_comment fires for PRs too; the reusable workflow filters those out.)
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read

@@ -54,7 +54,14 @@ concurrency:
 
 jobs:
   triage:
-    if: ${{ github.event.action == 'opened' || (github.event.action == 'labeled' && github.event.label.name == 'agent:assess') }}
+    # opened issue, manual agent:assess re-trigger, or — for an ongoing
+    # discussion — a NEW comment on an issue (not a PR; issue_comment fires for
+    # both). The script does the substantive comment gating (who/state/round
+    # cap / anti-self-loop), so the workflow only filters out PR comments here.
+    if: >-
+      github.event.action == 'opened' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'agent:assess') ||
+      (github.event_name == 'issue_comment' && github.event.action == 'created' && !github.event.issue.pull_request)
     runs-on: ${{ fromJSON(inputs.runner_labels) }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     env:
@@ -90,7 +97,14 @@ jobs:
           ISSUE_TITLE:  ${{ github.event.issue.title }}
           ISSUE_BODY:   ${{ github.event.issue.body }}
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
-          TRIGGER_KIND: ${{ github.event.action == 'opened' && 'opened' || 'assess' }}
+          # opened | assess | comment. issue_comment events also carry
+          # github.event.issue.*, so the ISSUE_* above resolve on all three.
+          TRIGGER_KIND: ${{ github.event_name == 'issue_comment' && 'comment' || (github.event.action == 'opened' && 'opened' || 'assess') }}
+          # The triggering comment (empty for opened/assess). Treated as
+          # UNTRUSTED data by the script; never interpolated into a shell.
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          COMMENT_BODY:   ${{ github.event.comment.body }}
+          COMMENT_ID:     ${{ github.event.comment.id }}
           GH_TOKEN:       ${{ secrets.GITHUB_TOKEN }}
           AGENT_GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
         run: bash _agentops/scripts/agent-bot/run_triage.sh

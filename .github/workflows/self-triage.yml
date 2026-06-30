@@ -13,6 +13,9 @@ name: self-triage
 on:
   issues:
     types: [opened, labeled]
+  # Reporter/maintainer comments drive the multi-round triage discussion.
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: read

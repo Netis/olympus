@@ -122,6 +122,18 @@ def test_marker_tracks_verdict():
         assert f"<!-- olympus-triage:{v} -->" in out, (v, out)
 
 
+def test_discuss_keeps_reply_no_controls_open_breadcrumb():
+    # discuss = mid-conversation: post the reply verbatim, but NO maintainer
+    # controls (they'd clutter an open back-and-forth), and an open breadcrumb so
+    # the comment trigger re-engages on the reporter's next reply.
+    reply = "Good question — I checked the SSE parser and I think the fix is to flush on the final chunk. Does that match what you're seeing? If so I'll scope it."
+    out = compose(reply, "discuss")
+    assert reply in out, out
+    assert "Maintainer controls" not in out, out
+    assert "<!-- olympus-triage:discuss -->" in out, out
+    assert "Triage:" not in out, out
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     fails = 0
