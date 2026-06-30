@@ -30,7 +30,10 @@
         "assess": { "type": "string", "default": "agent:assess", "description": "Manual re-triage trigger." },
         "try": { "type": "string", "default": "agent:try", "description": "Triage adds this on verdict=do; starts the dev agent." },
         "skip": { "type": "string", "default": "agent:skip", "description": "Mutes re-triage." },
-        "auto_agent": { "type": "string", "default": "auto-agent", "description": "Marks dev-agent PRs eligible for the auto-merge / revise gates." }
+        "auto_agent": { "type": "string", "default": "auto-agent", "description": "Marks dev-agent PRs eligible for the auto-merge / revise gates." },
+        "discussing": { "type": "string", "default": "agent:discussing", "description": "Marks an issue in an active back-and-forth triage discussion (verdict=discuss). Each reporter reply re-runs triage until the discussion converges to do/needs_info/skip." },
+        "staging_soaked": { "type": "string", "default": "staging-soaked", "description": "Added to a PR that cleared its staging soak; signals a human may merge it." },
+        "soak_failed": { "type": "string", "default": "soak-failed", "description": "Added to a PR whose staging soak (deploy or health check) did not hold." }
       }
     },
     "triage": {
@@ -48,7 +51,8 @@
           }
         },
         "language": { "type": "string", "default": "auto", "description": "Reply language. 'auto' = match the reporter; otherwise a fixed language code/name (e.g. 'en', 'zh')." },
-        "auto_dispatch": { "enum": ["trusted", "all", "never"], "default": "trusted", "description": "When a verdict=do issue may auto-dispatch the unattended dev agent. 'trusted' (default) = only issue authors with write/maintain/admin access; others get a warm reply + a maintainer control to dispatch by hand (human-in-the-loop against injected issue text on public repos). 'all' = auto-dispatch any author (internal/trusted repos). 'never' = always require a maintainer to add the try-label." }
+        "auto_dispatch": { "enum": ["trusted", "all", "never"], "default": "trusted", "description": "When a verdict=do issue may auto-dispatch the unattended dev agent. 'trusted' (default) = only issue authors with write/maintain/admin access; others get a warm reply + a maintainer control to dispatch by hand (human-in-the-loop against injected issue text on public repos). 'all' = auto-dispatch any author (internal/trusted repos). 'never' = always require a maintainer to add the try-label." },
+        "max_discussion_rounds": { "type": "integer", "default": 4, "description": "Max back-and-forth rounds triage holds with a reporter (each round = one triage reply) before it stops asking and loops in a human maintainer. The discussion loop fires on issue_comment from the reporter or a trusted maintainer; this caps cost and prevents ping-pong." }
       }
     },
     "implement": {
@@ -57,6 +61,28 @@
       "properties": {
         "build_cmd": { "type": "string", "description": "The build + test command the dev agent must get green before opening a PR (e.g. 'make build && make test')." },
         "allow_network": { "type": "boolean", "default": false, "description": "Let the implement/revise agent use network commands (curl/wget/ssh/...). Default false: the claude harness denies direct network egress so a prompt-injected issue can't exfiltrate. Not a full sandbox — indirect egress needs OS-level isolation; see docs/security.md." }
+      }
+    },
+    "testing": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional pre-merge staging soak. Omit (or set enabled:false) to keep the original behavior: a review APPROVE auto-merges simple PRs and waits for a human otherwise. When enabled, an APPROVE-d PR is classified — a 'simple' PR (within fast_path) keeps the auto-merge fast path; a 'complex' PR is deployed to a testing environment, soaked, then (on a clean soak) labeled staging-soaked for a human to merge. Olympus orchestrates; the repo supplies the deploy + health commands.",
+      "properties": {
+        "enabled": { "type": "boolean", "default": false, "description": "Turn the soak gate on. Default false = back-compatible." },
+        "deploy_cmd": { "type": "string", "description": "Command run on the checked-out PR head to deploy it to the testing environment (e.g. 'make deploy-staging'). The PR number is available as $PR_NUMBER." },
+        "health_cmd": { "type": "string", "description": "Command polled repeatedly during the soak window; a non-zero exit = unhealthy. Omit to fall back to a plain HTTP 2xx check against observer.health_url." },
+        "soak_minutes": { "type": "integer", "default": 30, "description": "How long the PR must stay healthy in the testing environment before it's marked staging-soaked. Bounded by the soak workflow's timeout_minutes." },
+        "teardown_cmd": { "type": "string", "description": "Optional command run after the soak (pass or fail) to tear the deployment down." },
+        "fast_path": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "What counts as a 'simple' PR that skips the soak and may auto-merge. A PR must satisfy ALL set ceilings. Defaults to the triage gate ceilings.",
+          "properties": {
+            "max_loc": { "type": "integer", "description": "Max changed lines (additions + deletions) for the fast path. Default: triage.gates.max_loc." },
+            "max_files": { "type": "integer", "description": "Max changed files for the fast path. Default: triage.gates.max_files." },
+            "areas": { "type": "array", "items": { "type": "string" }, "description": "If set, a simple PR may touch ONLY these path prefixes. Empty = areas not considered." }
+          }
+        }
       }
     },
     "observer": {
@@ -84,10 +110,11 @@
       "additionalProperties": false,
       "description": "Which agent CLI drives the surfaces. Omit for the built-in claude (Claude Code) harness — that's back-compatible with every existing consumer.",
       "properties": {
-        "kind": { "type": "string", "enum": ["claude", "custom"], "default": "claude", "description": "claude = built-in Claude Code. custom = run the 'command' template." },
-        "command": { "type": "string", "description": "custom only: a shell command template invoked per agent run. Placeholders: {model} {prompt_file} {out} {tools} {write} {max_turns}. e.g. 'codex exec --model {model} --full-auto < {prompt_file} > {out}'." },
-        "model": { "type": "string", "description": "Model id for this harness; overrides top-level .model. For a custom harness this is the {model} placeholder value." },
-        "health_probe": { "type": "boolean", "default": true, "description": "Poll the gateway's OpenAI-compatible /v1/models before each run (and to detect mid-run outages). Set false for harnesses whose endpoint isn't OpenAI-compatible." }
+        "kind": { "type": "string", "enum": ["claude", "codex", "custom"], "default": "claude", "description": "claude = built-in Claude Code. codex = built-in OpenAI Codex CLI ('codex exec'); reads its key from OPENAI_API_KEY on the runner and usually needs harness.proxy on staging/testing. custom = run the 'command' template." },
+        "command": { "type": "string", "description": "custom only: a shell command template invoked per agent run. Placeholders: {model} {prompt_file} {out} {tools} {write} {max_turns}. e.g. 'aider --model {model} --message-file {prompt_file} > {out}'." },
+        "model": { "type": "string", "description": "Model id for this harness; overrides top-level .model. For codex/custom this is the model the harness CLI is told to use (e.g. 'gpt-5')." },
+        "proxy": { "type": "string", "description": "Egress proxy URL for a NON-claude harness subprocess (e.g. 'http://172.16.103.81:8888'). Exported as HTTPS_PROXY/HTTP_PROXY/ALL_PROXY for the harness child only — codex reaches its model backend through it on staging/testing where a direct connection is blocked. The claude harness talks to the internal gateway and is never proxied." },
+        "health_probe": { "type": "boolean", "description": "Poll the gateway's OpenAI-compatible /v1/models before each run (and to detect mid-run outages). Defaults true for claude, false for codex; set explicitly for harnesses whose endpoint isn't OpenAI-compatible." }
       }
     }
   }

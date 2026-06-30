@@ -58,6 +58,12 @@ olympus_load_config() {
   export OLYMPUS_LABEL_TRY="$(_olc_get '.labels.try' 'agent:try' OLYMPUS_LABEL_TRY)"
   export OLYMPUS_LABEL_SKIP="$(_olc_get '.labels.skip' 'agent:skip' OLYMPUS_LABEL_SKIP)"
   export OLYMPUS_LABEL_AUTO_AGENT="$(_olc_get '.labels.auto_agent' 'auto-agent' OLYMPUS_LABEL_AUTO_AGENT)"
+  # An issue in an active back-and-forth triage discussion (verdict=discuss).
+  export OLYMPUS_LABEL_DISCUSSING="$(_olc_get '.labels.discussing' 'agent:discussing' OLYMPUS_LABEL_DISCUSSING)"
+  # A PR that has cleared its staging soak (left for a human to merge).
+  export OLYMPUS_LABEL_STAGING_SOAKED="$(_olc_get '.labels.staging_soaked' 'staging-soaked' OLYMPUS_LABEL_STAGING_SOAKED)"
+  # A PR whose staging soak failed (deploy or health check did not hold).
+  export OLYMPUS_LABEL_SOAK_FAILED="$(_olc_get '.labels.soak_failed' 'soak-failed' OLYMPUS_LABEL_SOAK_FAILED)"
 
   # --- triage gates ---
   export OLYMPUS_MAX_LOC="$(_olc_get '.triage.gates.max_loc' '300' OLYMPUS_MAX_LOC)"
@@ -69,6 +75,10 @@ olympus_load_config() {
   # trusted (default) = only authors with write+ access; all = any author
   # (internal repos); never = always require a maintainer to add the try-label.
   export OLYMPUS_AUTO_DISPATCH="$(_olc_get '.triage.auto_dispatch' 'trusted' OLYMPUS_AUTO_DISPATCH)"
+  # Max back-and-forth rounds triage will hold with a reporter before it stops
+  # asking and loops in a human maintainer (each round = one triage reply). The
+  # discussion loop fires on issue_comment; this caps cost + prevents ping-pong.
+  export OLYMPUS_MAX_DISCUSSION_ROUNDS="$(_olc_get '.triage.max_discussion_rounds' '4' OLYMPUS_MAX_DISCUSSION_ROUNDS)"
 
   # --- implement (dev agent) ---
   export OLYMPUS_BUILD_CMD="$(_olc_get '.implement.build_cmd' '' OLYMPUS_BUILD_CMD)"
@@ -76,6 +86,29 @@ olympus_load_config() {
   # harness denies curl/wget/ssh/... (a prompt-injected issue can't exfiltrate).
   # jq's `// empty` treats boolean false as empty, so normalise to a string.
   export OLYMPUS_IMPLEMENT_ALLOW_NETWORK="$(_olc_get '(.implement.allow_network | if . == true then "true" else "false" end)' 'false' OLYMPUS_IMPLEMENT_ALLOW_NETWORK)"
+
+  # --- testing (pre-merge staging soak) ---
+  # Default disabled → behavior identical to repos with no .testing block: a
+  # review APPROVE on a simple PR auto-merges, everything else waits for a human.
+  # When enabled, an APPROVE-d PR is classified: a "simple" PR (within the
+  # fast_path thresholds below) keeps the existing auto-merge fast path; a
+  # "complex" PR is deployed to a testing environment, soaked, and — on a clean
+  # soak — labeled staging-soaked for a human to merge (never auto-merged).
+  export OLYMPUS_TESTING_ENABLED="$(_olc_get '(.testing.enabled | if . == true then "true" else "false" end)' 'false' OLYMPUS_TESTING_ENABLED)"
+  export OLYMPUS_TESTING_DEPLOY_CMD="$(_olc_get '.testing.deploy_cmd' '' OLYMPUS_TESTING_DEPLOY_CMD)"
+  # Health/readiness command run repeatedly during the soak window. Empty falls
+  # back to the observer's health_url (a plain HTTP 2xx check in soak.sh).
+  export OLYMPUS_TESTING_HEALTH_CMD="$(_olc_get '.testing.health_cmd' '' OLYMPUS_TESTING_HEALTH_CMD)"
+  export OLYMPUS_TESTING_SOAK_MINUTES="$(_olc_get '.testing.soak_minutes' '30' OLYMPUS_TESTING_SOAK_MINUTES)"
+  export OLYMPUS_TESTING_TEARDOWN_CMD="$(_olc_get '.testing.teardown_cmd' '' OLYMPUS_TESTING_TEARDOWN_CMD)"
+  # "Simple" fast-path ceilings: a PR at/below all three skips the soak and may
+  # auto-merge. Default to the triage gate ceilings so a PR no bigger than what
+  # an unattended agent may attempt is treated as simple.
+  export OLYMPUS_TESTING_FAST_MAX_LOC="$(_olc_get '.testing.fast_path.max_loc' "${OLYMPUS_MAX_LOC}" OLYMPUS_TESTING_FAST_MAX_LOC)"
+  export OLYMPUS_TESTING_FAST_MAX_FILES="$(_olc_get '.testing.fast_path.max_files' "${OLYMPUS_MAX_FILES}" OLYMPUS_TESTING_FAST_MAX_FILES)"
+  # Optional area allow-list: if set, a simple PR must touch ONLY these path
+  # prefixes (comma-separated). Empty = areas are not considered.
+  export OLYMPUS_TESTING_FAST_AREAS="$(_olc_get '(.testing.fast_path.areas | join(","))' '' OLYMPUS_TESTING_FAST_AREAS)"
 
   # --- model (harness.model wins over top-level .model) ---
   export ANTHROPIC_MODEL="$(_olc_get '(.harness.model // .model)' "${ANTHROPIC_MODEL:-claude-3-5-sonnet-20241022}" ANTHROPIC_MODEL)"
@@ -87,10 +120,22 @@ olympus_load_config() {
   # /v1/models wait (for harnesses whose endpoint isn't OpenAI-compatible).
   export OLYMPUS_HARNESS="$(_olc_get '.harness.kind' 'claude' OLYMPUS_HARNESS)"
   export OLYMPUS_HARNESS_CMD="$(_olc_get '.harness.command' '' OLYMPUS_HARNESS_CMD)"
+  # Optional egress proxy for a NON-claude harness subprocess. codex must reach
+  # its model backend through a proxy on staging/testing (a direct connection is
+  # blocked); agent-harness.sh exports this as HTTPS_PROXY/HTTP_PROXY/ALL_PROXY
+  # for the harness CHILD only. The claude harness talks to the internal model
+  # gateway and is never proxied (see the no_proxy step in the workflows).
+  export OLYMPUS_HARNESS_PROXY="$(_olc_get '.harness.proxy' '' OLYMPUS_HARNESS_PROXY)"
+  # health_probe polls the gateway's OpenAI-compatible /v1/models. It defaults
+  # ON, but OFF for the codex harness (its backend isn't OpenAI-compatible). An
+  # explicit .harness.health_probe (true OR false) always wins.
   # jq's `// empty` (in _olc_get) treats boolean false as empty, so a literal
-  # `health_probe: false` would be lost — normalise to the string "false"/"true"
-  # inside the filter so only an explicit false disables the probe.
-  export OLYMPUS_HEALTH_PROBE="$(_olc_get '(.harness.health_probe | if . == false then "false" else "true" end)' 'true' OLYMPUS_HEALTH_PROBE)"
+  # `health_probe: false` would be lost — normalise to a "false"/"true" string
+  # inside the filter, and pick the kind-aware default for the absent case.
+  _olc_probe_default=true
+  case "$OLYMPUS_HARNESS" in codex) _olc_probe_default=false ;; esac
+  export OLYMPUS_HEALTH_PROBE="$(_olc_get "(.harness.health_probe | if . == false then \"false\" elif . == true then \"true\" else \"${_olc_probe_default}\" end)" "$_olc_probe_default" OLYMPUS_HEALTH_PROBE)"
+  unset _olc_probe_default
 
   # --- observer (argus): map .observer.* onto the ARGUS_* env argus.sh reads,
   #     unless the env already carries them (workflow/unit override wins). ---

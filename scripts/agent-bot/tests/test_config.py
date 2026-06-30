@@ -83,6 +83,67 @@ def test_custom_labels_and_bot():
     assert cfg["OLYMPUS_LABEL_TRY"] == "bot:go", cfg
 
 
+def test_new_label_defaults():
+    cfg = load(None)
+    assert cfg["OLYMPUS_LABEL_DISCUSSING"] == "agent:discussing", cfg
+    assert cfg["OLYMPUS_LABEL_STAGING_SOAKED"] == "staging-soaked", cfg
+    assert cfg["OLYMPUS_LABEL_SOAK_FAILED"] == "soak-failed", cfg
+
+
+def test_discussion_rounds():
+    assert load(None)["OLYMPUS_MAX_DISCUSSION_ROUNDS"] == "4"
+    cfg = load({"triage": {"max_discussion_rounds": 7}})
+    assert cfg["OLYMPUS_MAX_DISCUSSION_ROUNDS"] == "7", cfg
+
+
+def test_testing_defaults_disabled():
+    cfg = load(None)
+    assert cfg["OLYMPUS_TESTING_ENABLED"] == "false", cfg
+    assert cfg["OLYMPUS_TESTING_SOAK_MINUTES"] == "30", cfg
+    # fast-path ceilings default to the triage gate ceilings
+    assert cfg["OLYMPUS_TESTING_FAST_MAX_LOC"] == cfg["OLYMPUS_MAX_LOC"], cfg
+    assert cfg["OLYMPUS_TESTING_FAST_MAX_FILES"] == cfg["OLYMPUS_MAX_FILES"], cfg
+
+
+def test_testing_values_from_file():
+    cfg = load({
+        "triage": {"gates": {"max_loc": 200, "max_files": 8}},
+        "testing": {
+            "enabled": True,
+            "deploy_cmd": "make deploy-staging",
+            "soak_minutes": 45,
+            "fast_path": {"max_loc": 40, "areas": ["docs/", "scripts/"]},
+        },
+    })
+    assert cfg["OLYMPUS_TESTING_ENABLED"] == "true", cfg
+    assert cfg["OLYMPUS_TESTING_DEPLOY_CMD"] == "make deploy-staging", cfg
+    assert cfg["OLYMPUS_TESTING_SOAK_MINUTES"] == "45", cfg
+    assert cfg["OLYMPUS_TESTING_FAST_MAX_LOC"] == "40", cfg
+    # max_files unset under fast_path → inherits the triage gate ceiling
+    assert cfg["OLYMPUS_TESTING_FAST_MAX_FILES"] == "8", cfg
+    assert cfg["OLYMPUS_TESTING_FAST_AREAS"] == "docs/,scripts/", cfg
+
+
+def test_harness_codex_and_proxy():
+    cfg = load({"harness": {"kind": "codex", "proxy": "http://172.16.103.81:8888"}})
+    assert cfg["OLYMPUS_HARNESS"] == "codex", cfg
+    assert cfg["OLYMPUS_HARNESS_PROXY"] == "http://172.16.103.81:8888", cfg
+    # codex defaults health_probe OFF (backend isn't OpenAI-compatible)
+    assert cfg["OLYMPUS_HEALTH_PROBE"] == "false", cfg
+
+
+def test_codex_health_probe_explicit_true_wins():
+    cfg = load({"harness": {"kind": "codex", "health_probe": True}})
+    assert cfg["OLYMPUS_HEALTH_PROBE"] == "true", cfg
+
+
+def test_claude_health_probe_defaults_on():
+    # default harness (claude) keeps health_probe ON and is never proxied here
+    cfg = load(None)
+    assert cfg["OLYMPUS_HEALTH_PROBE"] == "true", cfg
+    assert cfg["OLYMPUS_HARNESS"] == "claude", cfg
+
+
 def main():
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     fails = 0
