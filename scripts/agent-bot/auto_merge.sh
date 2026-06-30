@@ -6,6 +6,11 @@
 #     author was a team member and we promoted earlier — see below)
 #   - themis's latest review state == APPROVED
 #   - the linked issue's author is on the auto-merge allowlist
+#
+# When staging soak is enabled (.testing.enabled) AND the PR is too big for the
+# fast path (classify_pr.sh → complex), the merge step is replaced by a soak:
+# we dispatch pr-soak instead and a human merges after a clean soak. Simple PRs
+# (and repos with soak off) keep the immediate admin-merge below.
 set -euo pipefail
 
 # Load .olympus.json → OLYMPUS_* (review-bot login, labels).
@@ -37,10 +42,20 @@ state=$(gh pr view "$PR" --json reviews --jq '
 issue=$(echo "$meta" | jq -r '.body' | grep -oE 'Closes #[0-9]+' | head -1 | tr -dc 0-9)
 [ -n "$issue" ] || { echo "no linked issue; skip"; exit 0; }
 
+BOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 author=$(gh issue view "$issue" --json author --jq '.author.login')
 for m in $TEAM; do
   if [ "$m" = "$author" ]; then
-    echo "themis APPROVED + author=$author ∈ TEAM → admin-merge"
+    # The author is merge-trusted. If staging soak is on and this PR is too big
+    # for the fast path, soak it first (a human merges after) instead of merging
+    # now. classify_pr.sh prints disabled|simple|complex (disabled = soak off).
+    klass=$(PR_NUMBER="$PR" bash "$BOT_DIR/classify_pr.sh" 2>/dev/null || echo disabled)
+    if [ "$klass" = "complex" ]; then
+      echo "themis APPROVED + author=$author ∈ TEAM, but PR is complex → soak before merge"
+      PR_NUMBER="$PR" bash "$BOT_DIR/soak_dispatch.sh"
+      exit 0
+    fi
+    echo "themis APPROVED + author=$author ∈ TEAM (${klass}) → admin-merge"
     # Lift draft (if still draft) and merge.
     gh pr ready "$PR" >/dev/null 2>&1 || true
     gh pr merge "$PR" --admin --squash --delete-branch

@@ -133,6 +133,7 @@ jobs:
       - name: Post review
         if: always()
         env:
+          OLYMPUS_CONFIG: ${{ inputs.config_path }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ADMIN_GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}

@@ -37,6 +37,9 @@ jobs:
       - name: harness adapter tests
         run: python3 scripts/agent-bot/tests/test_harness.py
 
+      - name: soak classify/comment tests
+        run: python3 scripts/agent-bot/tests/test_soak.py
+
       - name: eval bench check/score tests
         run: python3 evals/tests/test_checks.py
 
