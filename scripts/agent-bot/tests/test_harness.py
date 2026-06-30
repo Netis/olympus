@@ -129,7 +129,9 @@ check("codex implement still strips GitHub tokens", "env -u GH_TOKEN" in out)
 os.unlink(cfg)
 
 # --- 6. harness.proxy: exported for codex, never for claude -------------------
-PROXY = "http://172.16.103.81:8888"
+# Doc-range IP (RFC5737); the real staging proxy lives in the consumer's
+# config/secret, never in olympus source (leakage gate).
+PROXY = "http://192.0.2.10:8888"
 with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
     json.dump({"harness": {"kind": "codex", "proxy": PROXY}}, f)
     cfg = f.name

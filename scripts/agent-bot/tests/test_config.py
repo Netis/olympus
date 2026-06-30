@@ -125,9 +125,11 @@ def test_testing_values_from_file():
 
 
 def test_harness_codex_and_proxy():
-    cfg = load({"harness": {"kind": "codex", "proxy": "http://172.16.103.81:8888"}})
+    # Doc-range IP (RFC5737); the real staging proxy lives in the consumer's
+    # config/secret, never in olympus source (leakage gate).
+    cfg = load({"harness": {"kind": "codex", "proxy": "http://192.0.2.10:8888"}})
     assert cfg["OLYMPUS_HARNESS"] == "codex", cfg
-    assert cfg["OLYMPUS_HARNESS_PROXY"] == "http://172.16.103.81:8888", cfg
+    assert cfg["OLYMPUS_HARNESS_PROXY"] == "http://192.0.2.10:8888", cfg
     # codex defaults health_probe OFF (backend isn't OpenAI-compatible)
     assert cfg["OLYMPUS_HEALTH_PROBE"] == "false", cfg
 
