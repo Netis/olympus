@@ -40,7 +40,7 @@ into your repo's `.github/workflows/`:
 | `observe.yml` | schedule (prod repos only) | self-hosted runner |
 
 Edit each wrapper's `runner_labels` to match your pool, and keep both the
-`uses: ...@v0.4.0` and `olympus_ref: v0.4.0` on the **same** release.
+`uses: ...@v0.5.0` and `olympus_ref: v0.5.0` on the **same** release.
 
 > `pr-review.yml` keys off a workflow named **`ci`** completing. If your CI
 > workflow has a different name, change `workflows: [ci]` in the wrapper.
