@@ -7,10 +7,15 @@
 # the result with the task's objective binary check. No judge.
 #
 #   evals/run.sh                                  # baseline: the built-in claude harness
+#   evals/run.sh --harness codex --model gpt-5 --repeat 3 --label codex
+#                                                 # built-in codex harness
 #   evals/run.sh --harness custom \
-#                --command 'codex exec --model {model} --full-auto < {prompt_file} > {out}' \
-#                --model gpt-5 --repeat 3 --label codex
+#                --command 'aider --model {model} --message-file {prompt_file} > {out}' \
+#                --model gpt-5 --repeat 3 --label aider
 #   evals/run.sh --list                           # list task ids
+#
+# For codex on staging/testing set OLYMPUS_HARNESS_PROXY=http://<proxy>:<port>
+# (and OPENAI_API_KEY) in env before running.
 #
 # Needs: the model endpoint reachable (ANTHROPIC_BASE_URL/API_KEY in env) and the
 # chosen CLI installed. Runs on demand — NOT in CI (CI only lints this + the checks).
@@ -37,8 +42,9 @@ done
 export OLYMPUS_HARNESS="$harness"
 [ -n "$command_tmpl" ] && export OLYMPUS_HARNESS_CMD="$command_tmpl"
 [ -n "$model" ] && export ANTHROPIC_MODEL="$model"
-# A custom harness usually isn't behind an OpenAI-compatible /v1/models probe.
-[ "$harness" = "custom" ] && export OLYMPUS_HEALTH_PROBE="${OLYMPUS_HEALTH_PROBE:-false}"
+# codex/custom harnesses usually aren't behind an OpenAI-compatible /v1/models
+# probe — skip the gateway pre-flight unless the caller opted in.
+case "$harness" in codex|custom) export OLYMPUS_HEALTH_PROBE="${OLYMPUS_HEALTH_PROBE:-false}" ;; esac
 # shellcheck source=scripts/lib/agent-harness.sh
 source "$REPO/scripts/lib/agent-harness.sh"
 

@@ -165,6 +165,35 @@ def pr_has_label(number: str, name: str) -> bool:
     return proc.stdout.strip() == "true"
 
 
+def classify_pr(number: str) -> str:
+    """Run classify_pr.sh → "disabled" | "simple" | "complex". "disabled" means
+    staging soak is off (.testing.enabled false) so the PR merges as before."""
+    script = Path(__file__).resolve().parent.parent / "agent-bot" / "classify_pr.sh"
+    env = os.environ.copy()
+    env["PR_NUMBER"] = number
+    proc = subprocess.run(["bash", str(script)], capture_output=True, text=True, env=env)
+    if proc.returncode != 0:
+        sys.stderr.write(f"classify_pr.sh failed (treating as disabled): {proc.stderr}\n")
+        return "disabled"
+    return proc.stdout.strip() or "disabled"
+
+
+def dispatch_soak(number: str) -> None:
+    """Kick off the consumer's pr-soak workflow instead of merging a complex PR.
+    Needs the PAT (ADMIN_GH_TOKEN) — a `gh workflow run` under GITHUB_TOKEN is
+    dropped by GitHub's anti-recursion rule."""
+    script = Path(__file__).resolve().parent.parent / "agent-bot" / "soak_dispatch.sh"
+    env = os.environ.copy()
+    env["PR_NUMBER"] = number
+    admin_tok = os.environ.get("ADMIN_GH_TOKEN", "").strip()
+    if admin_tok:
+        env["GH_TOKEN"] = admin_tok
+    proc = subprocess.run(["bash", str(script)], capture_output=True, text=True, env=env)
+    sys.stdout.write(proc.stdout)
+    if proc.returncode != 0:
+        sys.stderr.write(f"soak dispatch failed: {proc.stderr}\n")
+
+
 def auto_merge(number: str) -> None:
     """Squash-merge with admin bypass. Repo doesn't have native
     `--auto` enabled, so we squash inline. Branch is deleted on
@@ -254,8 +283,16 @@ def main() -> int:
         else:
             author = pr_author(PR_NUMBER)
             if author and author in AUTO_MERGE_AUTHORS:
-                print(f"author={author} in AUTO_MERGE_AUTHORS — squash-merging")
-                auto_merge(PR_NUMBER)
+                # Merge-trusted author. If staging soak is on and the PR is too
+                # big for the fast path, soak it first (a human merges after)
+                # instead of squash-merging now.
+                klass = classify_pr(PR_NUMBER)
+                if klass == "complex":
+                    print(f"author={author} in AUTO_MERGE_AUTHORS but PR is complex — soaking before merge")
+                    dispatch_soak(PR_NUMBER)
+                else:
+                    print(f"author={author} in AUTO_MERGE_AUTHORS ({klass}) — squash-merging")
+                    auto_merge(PR_NUMBER)
             else:
                 print(f"author={author} not in AUTO_MERGE_AUTHORS={AUTO_MERGE_AUTHORS} — left for human")
 

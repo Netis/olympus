@@ -93,14 +93,41 @@ the official LiteLLM docs since exact flags evolve.
 ## Swapping the agent CLI (harness)
 
 The section above changes the **model** behind Claude Code. This changes the
-**agent CLI itself** — run `codex`, `aider`, or any wrapper instead of `claude`.
-Set the `harness` block in `.olympus.json`:
+**agent CLI itself**. Set the `harness` block in `.olympus.json`.
+
+### codex (built-in)
+
+```jsonc
+{
+  "harness": {
+    "kind": "codex",
+    "model": "gpt-5",
+    "proxy": "http://proxy.internal:8888"   // optional; staging/testing egress
+  }
+}
+```
+
+Olympus builds the `codex exec` invocation itself and maps each surface onto
+codex's sandbox — **read-only** for triage/review, **workspace-write** for the
+implement/revise surface (the only one allowed to edit files). `health_probe`
+defaults **off** for codex. The runner needs the `codex` CLI installed and
+`OPENAI_API_KEY` in env (add it as a repo secret or set it on the box).
+
+**Proxy (staging/testing).** Where codex can't reach its model backend directly,
+give it an egress proxy: either `harness.proxy` above, or — to keep an internal
+IP out of committed config — the **`HARNESS_PROXY` repo secret** (it wins when
+set). Olympus exports it as `HTTPS_PROXY`/`HTTP_PROXY`/`ALL_PROXY` for the codex
+child **only**; the claude harness is never proxied (it uses the internal
+gateway). See [security.md](../security.md) — codex has no tool deny-list, so
+run it in a trusted environment and rely on the proxy + OS-level egress control.
+
+### custom (any other CLI)
 
 ```jsonc
 {
   "harness": {
     "kind": "custom",
-    "command": "codex exec --model {model} --full-auto < {prompt_file} > {out}",
+    "command": "aider --model {model} --message-file {prompt_file} > {out}",
     "model": "gpt-5",
     "health_probe": false
   }
@@ -112,8 +139,7 @@ instructions) `{out}` (where to write the agent's output) `{tools}` (the
 allow-listed tools for that surface) `{write}` (`true` only for the implement
 surface — your harness should refuse edits otherwise) `{max_turns}`. Set
 `health_probe: false` unless your harness talks to an OpenAI-compatible
-`/v1/models` endpoint. The runner must have the CLI installed + its auth in env
-(e.g. `OPENAI_API_KEY` for codex — add it as a repo secret / set it on the box).
+`/v1/models` endpoint. `harness.proxy` works for `custom` too.
 
 Omit the `harness` block entirely to use the built-in **`claude`** harness
 (the default; identical to every existing consumer).
@@ -124,7 +150,43 @@ Omit the `harness` block entirely to use the built-in **`claude`** harness
 > `post_review.py` parses. A non-claude harness may format its output
 > differently and need prompt tuning to satisfy those parsers — Olympus does
 > **not** normalise output across harnesses. **Qualify a candidate CLI with the
-> `evals/` bench (the harness qualification suite) before wiring it into the live loop.**
+> `evals/` bench (the harness qualification suite) before wiring it into the live loop:**
+> `evals/run.sh --harness codex --model gpt-5 --repeat 3 --label codex`.
+
+---
+
+## Staging soak before merge
+
+By default a review APPROVE auto-merges a simple PR (allowlisted author) and
+leaves everything else for a human. Turn on `.testing` to insert a **staging
+soak** for bigger changes: a **simple** PR (within `fast_path`) keeps the
+auto-merge fast path, while a **complex** PR is deployed to your testing
+environment, soaked, and — on a clean soak — labeled `staging-soaked` for a
+human to merge. Olympus never auto-merges a soaked PR.
+
+```jsonc
+{
+  "testing": {
+    "enabled": true,
+    "deploy_cmd": "make deploy-staging",      // $PR_NUMBER is available
+    "health_cmd": "curl -fsS http://localhost:8080/healthz",
+    "soak_minutes": 30,
+    "teardown_cmd": "make teardown-staging",
+    "fast_path": { "max_loc": 40, "max_files": 3, "areas": ["docs/"] }
+  }
+}
+```
+
+1. Add the `pr-soak.yml` wrapper (see `examples/consumer/.github/workflows/`)
+   to your repo's default branch — `auto_merge.sh` / `post_review.py` dispatch
+   it by that name (override with `OLYMPUS_SOAK_WORKFLOW`).
+2. Its `timeout_minutes` must exceed `soak_minutes` (the job stays alive polling
+   health for the whole window).
+3. The `staging-soaked` / `soak-failed` labels are auto-created on first use.
+
+Olympus orchestrates the soak (deploy → poll health → label); your repo owns
+what "deploy" and "healthy" mean. Soak only runs for PRs that would otherwise
+auto-merge (same author trust), so untrusted PRs are unchanged.
 
 ---
 

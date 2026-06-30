@@ -195,6 +195,72 @@ def test_build_footer_falls_back_without_env():
             os.environ["OLYMPUS_REVIEW_BOT_LOGIN"] = prev
 
 
+def _fake_proc(returncode, stdout="", stderr=""):
+    return type("P", (), {"returncode": returncode, "stdout": stdout, "stderr": stderr})()
+
+
+def test_classify_pr_returns_stdout_word():
+    """classify_pr surfaces classify_pr.sh's stdout (disabled|simple|complex)."""
+    orig = post_review.subprocess.run
+    post_review.subprocess.run = lambda *a, **k: _fake_proc(0, "complex\n")
+    try:
+        assert post_review.classify_pr("999") == "complex"
+    finally:
+        post_review.subprocess.run = orig
+
+
+def test_classify_pr_failure_is_disabled():
+    """A failing classify script is treated as 'disabled' (merge as before)."""
+    orig = post_review.subprocess.run
+    post_review.subprocess.run = lambda *a, **k: _fake_proc(1, "", "boom")
+    try:
+        assert post_review.classify_pr("999") == "disabled"
+    finally:
+        post_review.subprocess.run = orig
+
+
+def _drive_main_approve(klass):
+    """Run main() on an APPROVE review from a trusted, non-auto-agent author,
+    with classify_pr stubbed to `klass`. Returns (merge_calls, soak_calls)."""
+    calls = {"merge": 0, "soak": 0}
+    saved = {k: getattr(post_review, k) for k in (
+        "AGENT_EXIT", "AUTO_MERGE_AUTHORS", "post_via_gh_review", "pr_has_label",
+        "pr_author", "classify_pr", "auto_merge", "dispatch_soak")}
+    post_review.OUT_PATH.write_text("### Summary\n**APPROVE**\n\n### Verified\n- ok\n")
+    try:
+        post_review.AGENT_EXIT = "success"
+        post_review.AUTO_MERGE_AUTHORS = {"alice"}
+        post_review.post_via_gh_review = lambda n, e, b: 0
+        post_review.pr_has_label = lambda n, name: False           # not auto-agent
+        post_review.pr_author = lambda n: "alice"                  # trusted
+        post_review.classify_pr = lambda n: klass
+        post_review.auto_merge = lambda n: calls.__setitem__("merge", calls["merge"] + 1)
+        post_review.dispatch_soak = lambda n: calls.__setitem__("soak", calls["soak"] + 1)
+        post_review.main()
+    finally:
+        for k, v in saved.items():
+            setattr(post_review, k, v)
+        if post_review.OUT_PATH.exists():
+            post_review.OUT_PATH.unlink()
+    return calls["merge"], calls["soak"]
+
+
+def test_main_complex_soaks_not_merges():
+    merge, soak = _drive_main_approve("complex")
+    assert (merge, soak) == (0, 1), (merge, soak)
+
+
+def test_main_simple_merges_not_soaks():
+    merge, soak = _drive_main_approve("simple")
+    assert (merge, soak) == (1, 0), (merge, soak)
+
+
+def test_main_disabled_merges_not_soaks():
+    # soak off (.testing.enabled false) → unchanged behavior: merge.
+    merge, soak = _drive_main_approve("disabled")
+    assert (merge, soak) == (1, 0), (merge, soak)
+
+
 if __name__ == "__main__":
     import traceback
     failed = 0

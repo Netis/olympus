@@ -1,0 +1,90 @@
+name: olympus-soak
+
+# Reusable staging-soak workflow. Dispatched per-PR (by auto_merge.sh /
+# post_review.py via the consumer's pr-soak wrapper) when an APPROVED PR is too
+# big for the auto-merge fast path. It deploys the PR head to the consumer's
+# testing environment, soaks it for .testing.soak_minutes, then labels the PR
+# staging-soaked (a human merges) or soak-failed. Olympus never merges here.
+#
+# Consumer wrapper (examples/consumer/.github/workflows/pr-soak.yml):
+#   name: pr-soak
+#   on:
+#     workflow_dispatch: { inputs: { pr_number: { required: true, type: string } } }
+#   jobs:
+#     soak:
+#       uses: Netis/olympus/.github/workflows/soak.yml@vX.Y.Z
+#       permissions: { contents: read, issues: write, pull-requests: write }
+#       with: { runner_labels: '["self-hosted","my-runner"]', pr_number: '${{ inputs.pr_number }}' }
+#       secrets: inherit
+#
+# The deploy / health / teardown commands and the soak window all come from the
+# consumer's .olympus.json (.testing.*); nothing here is repo-specific. timeout
+# must exceed .testing.soak_minutes (the job sleeps + polls for the whole window).
+
+on:
+  workflow_call:
+    inputs:
+      olympus_repo:
+        type: string
+        default: Netis/olympus
+      olympus_ref:
+        type: string
+        default: main
+      runner_labels:
+        type: string
+        default: '["self-hosted"]'
+      config_path:
+        type: string
+        default: .olympus.json
+      timeout_minutes:
+        # Must exceed .testing.soak_minutes — the soak job stays alive polling
+        # health for the whole window.
+        type: number
+        default: 60
+      pr_number:
+        type: string
+        required: true
+    secrets:
+      AGENT_GH_TOKEN: { required: true }
+
+concurrency:
+  # One soak per PR; a newer soak supersedes an in-flight one (re-pushed head).
+  group: olympus-soak-${{ inputs.pr_number }}
+  cancel-in-progress: true
+
+jobs:
+  soak:
+    runs-on: ${{ fromJSON(inputs.runner_labels) }}
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    steps:
+      - name: Resolve PR head SHA
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
+        run: |
+          PR="${{ inputs.pr_number }}"
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then echo "::error::pr_number required"; exit 1; fi
+          eval "$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRefOid \
+            --jq '"HEAD_SHA=\(.headRefOid)"')"
+          { echo "pr_number=$PR"; echo "head_sha=$HEAD_SHA"; } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR head (consumer repo)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.head_sha }}
+          fetch-depth: 1
+
+      - name: Fetch olympus scripts
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.olympus_repo }}
+          ref: ${{ inputs.olympus_ref }}
+          token: ${{ secrets.AGENT_GH_TOKEN }}
+          path: _agentops
+
+      - name: Soak the PR
+        env:
+          OLYMPUS_CONFIG: ${{ inputs.config_path }}
+          GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+        run: bash _agentops/scripts/agent-bot/soak.sh

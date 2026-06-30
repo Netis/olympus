@@ -26,7 +26,7 @@ gateway, and `.olympus.json` itself (committed by maintainers).
 |---|---|---|
 | **Authorization** | **Maintainer-dispatch gate.** A `do` verdict auto-dispatches the unattended agent only for authors with write/maintain/admin access; others get a warm reply + a maintainer control to dispatch by hand. A human reviews stranger issues before the agent acts. | `.triage.auto_dispatch` (`trusted`\|`all`\|`never`, default `trusted`) — `run_triage.sh` |
 | **Prompt** | **Untrusted-input framing.** Every agent prompt states that issue/review text is data describing *what to change*, never instructions to obey, with the interpolated title fenced in explicit BEGIN/END UNTRUSTED markers. | `run_hephaestus.sh`, `run_triage.sh`, `run_revise.sh` |
-| **Tools** | **Network egress denied.** The implement/revise agent runs with `--disallowed-tools` for `curl/wget/nc/ncat/netcat/telnet/ssh/scp/sftp/socat/ftp` + `mcp__*`. Deny beats the broad `Bash` allow and survives `bash -c` / `&&` / `;` / `|` wrappers. | `agent-harness.sh`; opt out with `.implement.allow_network` |
+| **Tools** | **Network egress denied (claude harness).** The implement/revise agent runs with `--disallowed-tools` for `curl/wget/nc/ncat/netcat/telnet/ssh/scp/sftp/socat/ftp` + `mcp__*`. Deny beats the broad `Bash` allow and survives `bash -c` / `&&` / `;` / `|` wrappers. **The `codex`/`custom` harnesses have no equivalent tool deny-list** — see residual risks. | `agent-harness.sh`; opt out with `.implement.allow_network` |
 | **Credentials** | **Token stripping.** `GH_TOKEN`/`GITHUB_TOKEN`/`AGENT_GH_TOKEN`/`ADMIN_GH_TOKEN` are removed from the implement subprocess (it edits code + builds; the *driver* script makes the `gh` calls). Model-gateway creds are kept. | `agent-harness.sh` (`env -u`) |
 | **Outbound hygiene** | **Guard linters (no LLM).** Leakage / secret-reference / secret-value gates keep internal IPs, machine paths, and key material out of every outbound surface (issues, PR bodies, reviews, commits). | `guard.yml`, `scripts/lint/check-*.sh` |
 | **Blast radius** | Revise round cap → human escalation; per-issue/PR workflow concurrency; the observer scrubs incident bodies before filing. | `revise_dispatch.sh`, workflow `concurrency` |
@@ -54,6 +54,19 @@ These need controls the operator owns at the OS / infrastructure layer:
 - **Model fallibility.** Prompt framing reduces, but cannot guarantee, that the
   agent ignores a cleverly injected instruction. The tool/network/credential
   controls are what bound the damage when framing fails.
+- **Non-claude harnesses lack the tool deny-list.** The `--disallowed-tools`
+  egress block is claude-specific; `codex`/`custom` harnesses get the prompt
+  framing and token-stripping, but not the direct-egress deny. **Run codex only
+  in a trusted environment, behind the OS-level egress firewall, with
+  `harness.proxy` as the single allowed egress path** — the proxy doubles as an
+  egress allow-list. The `HARNESS_PROXY` secret keeps that internal address out
+  of committed config.
+- **Staging soak runs PR code.** When `.testing.enabled`, a complex PR is
+  deployed to the testing environment via `testing.deploy_cmd` — i.e. PR code
+  executes there (as CI already does). Soak only runs for PRs that would
+  otherwise auto-merge (same author trust gate), but the testing environment
+  must be **isolated from prod** and the soak runner should be egress-firewalled
+  like the implement runner. `deploy_cmd`/`health_cmd` are trusted config.
 
 ## Operator hardening checklist
 
@@ -67,6 +80,12 @@ These need controls the operator owns at the OS / infrastructure layer:
   internal repos where every author is already trusted.
 - Leave `AUTO_MERGE_TEAM` empty until you trust the loop; gated auto-merge is
   opt-in.
+- If you run the **codex** harness, set `harness.proxy` / the `HARNESS_PROXY`
+  secret and make that proxy the only egress the runner can reach (codex has no
+  tool deny-list).
+- If you enable **staging soak**, keep the testing environment isolated from
+  prod and egress-firewall the soak runner; the soaked PR still needs a human to
+  merge it.
 
 ## Reporting a vulnerability
 

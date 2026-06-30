@@ -12,7 +12,10 @@
     "assess": "agent:assess",
     "try": "agent:try",
     "skip": "agent:skip",
-    "auto_agent": "auto-agent"
+    "auto_agent": "auto-agent",
+    "discussing": "agent:discussing",
+    "staging_soaked": "staging-soaked",
+    "soak_failed": "soak-failed"
   },
   "triage": {
     "gates": {
@@ -21,10 +24,19 @@
       "contained_areas": ["one package", "docs/", "one workflow"],
       "test_hint": "a unit / integration test"
     },
-    "language": "auto"
+    "language": "auto",
+    "max_discussion_rounds": 4
   },
   "implement": {
     "build_cmd": "make build && make test"
+  },
+  "testing": {
+    "enabled": false,
+    "deploy_cmd": "make deploy-staging",
+    "health_cmd": "curl -fsS http://localhost:8080/healthz",
+    "soak_minutes": 30,
+    "teardown_cmd": "make teardown-staging",
+    "fast_path": { "max_loc": 40, "max_files": 3, "areas": ["docs/"] }
   },
   "observer": {
     "service_name": "my-service",

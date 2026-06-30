@@ -7,6 +7,8 @@
 # function so the harness CLI becomes a `.olympus.json` choice:
 #
 #   harness.kind = "claude"  (default — byte-compatible with the old inline calls)
+#                | "codex"   (built-in `codex exec`; reads OPENAI_API_KEY, may
+#                             reach its backend through harness.proxy)
 #                | "custom"  (run OLYMPUS_HARNESS_CMD, a command template)
 #
 # Public entry point:
@@ -19,9 +21,10 @@
 # retry-on-gateway-down loop (both no-ops when OLYMPUS_HEALTH_PROBE != "true").
 #
 # Config consumed (exported by config.sh; safe defaults if unset):
-#   OLYMPUS_HARNESS        claude | custom            (default claude)
+#   OLYMPUS_HARNESS        claude | codex | custom    (default claude)
 #   OLYMPUS_HARNESS_CMD    custom command template    (custom only)
-#   OLYMPUS_HEALTH_PROBE   true | false               (default true)
+#   OLYMPUS_HARNESS_PROXY  egress proxy URL           (non-claude harnesses only)
+#   OLYMPUS_HEALTH_PROBE   true | false               (default true; false for codex)
 #   ANTHROPIC_MODEL          model id for the claude harness / {model} placeholder
 #
 # Dry run: AGENT_HARNESS_DRYRUN=1 prints the command that WOULD run (one line)
@@ -74,21 +77,37 @@ agent_run() {
   local write; write="$(_agent_profile_write "$profile")"
   local kind="${OLYMPUS_HARNESS:-claude}"
 
-  # Least privilege for the implement/revise agent (it acts on UNTRUSTED issue
-  # text): strip GitHub/forge tokens from its subprocess. It edits code + runs
-  # builds and never calls gh itself (the driver script does), so a
-  # prompt-injected issue can't read or use the PAT. Model-gateway creds
-  # (ANTHROPIC_*) are kept — the agent needs them. Applied at exec below and
-  # surfaced in the dry-run. Triage/review keep their tokens (they DO call gh).
-  local -a env_strip=()
+  # Per-run env prefix for the harness child (an `env ...` wrapper, or empty).
+  # Two concerns fold into it:
+  #  1. Least privilege for implement/revise (it acts on UNTRUSTED issue text):
+  #     strip GitHub/forge tokens. It edits code + runs builds and never calls
+  #     gh itself (the driver does), so a prompt-injected issue can't read/use
+  #     the PAT. Model-gateway creds (ANTHROPIC_*) are kept. Triage/review keep
+  #     their tokens (they DO call gh).
+  #  2. Egress proxy for a NON-claude harness: when harness.proxy is set, export
+  #     HTTPS_PROXY/HTTP_PROXY/ALL_PROXY (+ lowercase) so codex reaches its model
+  #     backend through the proxy on staging/testing (a direct connection is
+  #     blocked). The claude harness is NEVER proxied — it talks to the internal
+  #     gateway (see the no_proxy step in the reusable workflows).
+  # Both are surfaced in the dry-run.
+  local -a env_unset=() env_set=()
   if [ "$profile" = "implement" ]; then
-    env_strip=(env -u GH_TOKEN -u GITHUB_TOKEN -u AGENT_GH_TOKEN -u ADMIN_GH_TOKEN)
+    env_unset=(-u GH_TOKEN -u GITHUB_TOKEN -u AGENT_GH_TOKEN -u ADMIN_GH_TOKEN)
+  fi
+  if [ "$kind" != "claude" ] && [ -n "${OLYMPUS_HARNESS_PROXY:-}" ]; then
+    env_set=(HTTPS_PROXY="$OLYMPUS_HARNESS_PROXY" HTTP_PROXY="$OLYMPUS_HARNESS_PROXY" ALL_PROXY="$OLYMPUS_HARNESS_PROXY" \
+             https_proxy="$OLYMPUS_HARNESS_PROXY" http_proxy="$OLYMPUS_HARNESS_PROXY" all_proxy="$OLYMPUS_HARNESS_PROXY")
+  fi
+  local -a env_prefix=()
+  if [ ${#env_unset[@]} -gt 0 ] || [ ${#env_set[@]} -gt 0 ]; then
+    env_prefix=(env "${env_unset[@]}" "${env_set[@]}")
   fi
 
   # --- build the harness command --------------------------------------------
-  # For the claude harness we keep a real argv array (no eval). For custom we
-  # build a single shell string from the template so consumers can use pipes.
-  local -a claude_cmd=()
+  # claude + codex are argv harnesses (a real argv array, no eval) — the run
+  # loop below pipes the prompt on stdin and captures stdout. custom builds a
+  # single shell string from a template so consumers can use pipes/redirs.
+  local -a agent_argv=()
   local custom_cmd=""
   if [ "$kind" = "custom" ]; then
     [ -n "${OLYMPUS_HARNESS_CMD:-}" ] || { echo "agent_run: harness.kind=custom but OLYMPUS_HARNESS_CMD is empty" >&2; return 78; }
@@ -102,16 +121,30 @@ agent_run() {
     custom_cmd="${custom_cmd//\{tools\}/$tool_set}"
     custom_cmd="${custom_cmd//\{write\}/$write}"
     custom_cmd="${custom_cmd//\{max_turns\}/${max_turns:-0}}"
+  elif [ "$kind" = "codex" ]; then
+    # Built-in OpenAI Codex harness. `codex exec` runs non-interactively, reads
+    # the prompt on stdin (the run loop pipes `< $prompt`), and writes to stdout.
+    # Map the profile onto codex's sandbox: read-only for investigate/review,
+    # workspace-write for implement (the only profile allowed to edit files).
+    # Need full control over the flags? Use harness.kind=custom + a command
+    # template. Codex reads OPENAI_API_KEY from the env and (on staging/testing)
+    # reaches its backend through harness.proxy, injected via env_prefix above.
+    agent_argv=(codex exec --model "$model")
+    if [ "$write" = "true" ]; then
+      agent_argv+=(--sandbox workspace-write)
+    else
+      agent_argv+=(--sandbox read-only)
+    fi
   else
-    claude_cmd=(claude --print --model "$model")
-    [ -n "$output_format" ]   && claude_cmd+=(--output-format "$output_format")
-    [ -n "$max_turns" ]       && claude_cmd+=(--max-turns "$max_turns")
-    [ -n "$permission_mode" ] && claude_cmd+=(--permission-mode "$permission_mode")
+    agent_argv=(claude --print --model "$model")
+    [ -n "$output_format" ]   && agent_argv+=(--output-format "$output_format")
+    [ -n "$max_turns" ]       && agent_argv+=(--max-turns "$max_turns")
+    [ -n "$permission_mode" ] && agent_argv+=(--permission-mode "$permission_mode")
     if [ -n "$tools" ]; then
-      claude_cmd+=(--allowed-tools "$tools")           # single (comma-sep) override
+      agent_argv+=(--allowed-tools "$tools")           # single (comma-sep) override
     else
       # shellcheck disable=SC2206  # deliberate word-split of the tool set
-      claude_cmd+=(--allowed-tools $tool_set)
+      agent_argv+=(--allowed-tools $tool_set)
     fi
     # Implement/revise run on untrusted issue text — deny direct network egress
     # + remote shells unless the consumer opts in (.implement.allow_network).
@@ -120,7 +153,7 @@ agent_run() {
     # sandbox: indirect egress (a build script, `python -c` that shells out)
     # still needs OS-level network isolation on the runner — see docs/security.md.
     if [ "$profile" = "implement" ] && [ "${OLYMPUS_IMPLEMENT_ALLOW_NETWORK:-false}" != "true" ]; then
-      claude_cmd+=(--disallowed-tools
+      agent_argv+=(--disallowed-tools
         'Bash(curl:*)' 'Bash(wget:*)' 'Bash(nc:*)' 'Bash(ncat:*)' 'Bash(netcat:*)'
         'Bash(telnet:*)' 'Bash(ssh:*)' 'Bash(scp:*)' 'Bash(sftp:*)' 'Bash(socat:*)'
         'Bash(ftp:*)' 'mcp__*')
@@ -129,9 +162,9 @@ agent_run() {
 
   # --- dry run: print the command and stop ----------------------------------
   if [ "${AGENT_HARNESS_DRYRUN:-}" = "1" ]; then
-    local _pfx=""; [ ${#env_strip[@]} -gt 0 ] && _pfx="${env_strip[*]} "
+    local _pfx=""; [ ${#env_prefix[@]} -gt 0 ] && _pfx="${env_prefix[*]} "
     if [ "$kind" = "custom" ]; then printf '%s\n' "${_pfx}${custom_cmd}";
-    else printf '%s\n' "${_pfx}${claude_cmd[*]}"; fi
+    else printf '%s\n' "${_pfx}${agent_argv[*]}"; fi
     return 0
   fi
 
@@ -141,25 +174,27 @@ agent_run() {
   fi
 
   # --- run with retry-on-gateway-down ---------------------------------------
-  # Prefix array: the per-profile env scrub (implement) then an optional
-  # `timeout S`. Empty → no prefix.
-  local -a runner=("${env_strip[@]}")
+  # Prefix array: the per-run env wrapper (token scrub + harness proxy) then an
+  # optional `timeout S`. Empty → no prefix. The `${a[@]+"${a[@]}"}` guard makes
+  # expanding an EMPTY array safe under `set -u` on bash 3.2 (macOS runners);
+  # it's a no-op on bash 4+.
+  local -a runner=("${env_prefix[@]+"${env_prefix[@]}"}")
   [ -n "$timeout_s" ] && runner+=(timeout "$timeout_s")
   local retry_max="${CLAUDE_RETRY_MAX:-2}" attempt=0 rc=0
   while true; do
     set +e
     if [ -n "$streamlog" ]; then
       if [ "$kind" = "custom" ]; then
-        stdbuf -oL "${env_strip[@]}" bash -c "$custom_cmd" 2>&1 | stdbuf -oL tee "$streamlog"
+        stdbuf -oL "${env_prefix[@]+"${env_prefix[@]}"}" bash -c "$custom_cmd" 2>&1 | stdbuf -oL tee "$streamlog"
       else
-        stdbuf -oL "${env_strip[@]}" "${claude_cmd[@]}" < "$prompt" 2>&1 | stdbuf -oL tee "$streamlog"
+        stdbuf -oL "${env_prefix[@]+"${env_prefix[@]}"}" "${agent_argv[@]}" < "$prompt" 2>&1 | stdbuf -oL tee "$streamlog"
       fi
       rc=${PIPESTATUS[0]}
     else
       if [ "$kind" = "custom" ]; then
-        "${runner[@]}" bash -c "$custom_cmd" > "${out:-/dev/stdout}" 2> "$errlog"
+        "${runner[@]+"${runner[@]}"}" bash -c "$custom_cmd" > "${out:-/dev/stdout}" 2> "$errlog"
       else
-        "${runner[@]}" "${claude_cmd[@]}" < "$prompt" > "${out:-/dev/stdout}" 2> "$errlog"
+        "${runner[@]+"${runner[@]}"}" "${agent_argv[@]}" < "$prompt" > "${out:-/dev/stdout}" 2> "$errlog"
       fi
       rc=$?
     fi

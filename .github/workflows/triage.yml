@@ -44,6 +44,11 @@ on:
       LITELLM_API_KEY:  { required: true }
       LITELLM_NO_PROXY: { required: false }
       AGENT_GH_TOKEN:   { required: true }
+      # codex harness only: its API key + the staging/testing egress proxy it
+      # must use. Ignored by the claude harness. Either set HARNESS_PROXY here or
+      # .harness.proxy in .olympus.json.
+      OPENAI_API_KEY:   { required: false }
+      HARNESS_PROXY:    { required: false }
 
 concurrency:
   # One triage per issue; do NOT cancel in progress — the agent:try label this
@@ -54,13 +59,24 @@ concurrency:
 
 jobs:
   triage:
-    if: ${{ github.event.action == 'opened' || (github.event.action == 'labeled' && github.event.label.name == 'agent:assess') }}
+    # opened issue, manual agent:assess re-trigger, or — for an ongoing
+    # discussion — a NEW comment on an issue (not a PR; issue_comment fires for
+    # both). The script does the substantive comment gating (who/state/round
+    # cap / anti-self-loop), so the workflow only filters out PR comments here.
+    if: >-
+      github.event.action == 'opened' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'agent:assess') ||
+      (github.event_name == 'issue_comment' && github.event.action == 'created' && !github.event.issue.pull_request)
     runs-on: ${{ fromJSON(inputs.runner_labels) }}
     timeout-minutes: ${{ inputs.timeout_minutes }}
     env:
       ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_BASE_URL }}
       ANTHROPIC_API_KEY:  ${{ secrets.LITELLM_API_KEY }}
       ANTHROPIC_MODEL:    ${{ inputs.model }}
+      # codex harness: auth + egress proxy. Empty when unset → config.sh keeps
+      # any .harness.proxy from the file (a blank env never overrides it).
+      OPENAI_API_KEY:        ${{ secrets.OPENAI_API_KEY }}
+      OLYMPUS_HARNESS_PROXY: ${{ secrets.HARNESS_PROXY }}
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
       - name: no_proxy for the model gateway
@@ -90,7 +106,14 @@ jobs:
           ISSUE_TITLE:  ${{ github.event.issue.title }}
           ISSUE_BODY:   ${{ github.event.issue.body }}
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
-          TRIGGER_KIND: ${{ github.event.action == 'opened' && 'opened' || 'assess' }}
+          # opened | assess | comment. issue_comment events also carry
+          # github.event.issue.*, so the ISSUE_* above resolve on all three.
+          TRIGGER_KIND: ${{ github.event_name == 'issue_comment' && 'comment' || (github.event.action == 'opened' && 'opened' || 'assess') }}
+          # The triggering comment (empty for opened/assess). Treated as
+          # UNTRUSTED data by the script; never interpolated into a shell.
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          COMMENT_BODY:   ${{ github.event.comment.body }}
+          COMMENT_ID:     ${{ github.event.comment.id }}
           GH_TOKEN:       ${{ secrets.GITHUB_TOKEN }}
           AGENT_GH_TOKEN: ${{ secrets.AGENT_GH_TOKEN }}
         run: bash _agentops/scripts/agent-bot/run_triage.sh
