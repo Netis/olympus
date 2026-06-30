@@ -175,24 +175,26 @@ agent_run() {
 
   # --- run with retry-on-gateway-down ---------------------------------------
   # Prefix array: the per-run env wrapper (token scrub + harness proxy) then an
-  # optional `timeout S`. Empty → no prefix.
-  local -a runner=("${env_prefix[@]}")
+  # optional `timeout S`. Empty → no prefix. The `${a[@]+"${a[@]}"}` guard makes
+  # expanding an EMPTY array safe under `set -u` on bash 3.2 (macOS runners);
+  # it's a no-op on bash 4+.
+  local -a runner=("${env_prefix[@]+"${env_prefix[@]}"}")
   [ -n "$timeout_s" ] && runner+=(timeout "$timeout_s")
   local retry_max="${CLAUDE_RETRY_MAX:-2}" attempt=0 rc=0
   while true; do
     set +e
     if [ -n "$streamlog" ]; then
       if [ "$kind" = "custom" ]; then
-        stdbuf -oL "${env_prefix[@]}" bash -c "$custom_cmd" 2>&1 | stdbuf -oL tee "$streamlog"
+        stdbuf -oL "${env_prefix[@]+"${env_prefix[@]}"}" bash -c "$custom_cmd" 2>&1 | stdbuf -oL tee "$streamlog"
       else
-        stdbuf -oL "${env_prefix[@]}" "${agent_argv[@]}" < "$prompt" 2>&1 | stdbuf -oL tee "$streamlog"
+        stdbuf -oL "${env_prefix[@]+"${env_prefix[@]}"}" "${agent_argv[@]}" < "$prompt" 2>&1 | stdbuf -oL tee "$streamlog"
       fi
       rc=${PIPESTATUS[0]}
     else
       if [ "$kind" = "custom" ]; then
-        "${runner[@]}" bash -c "$custom_cmd" > "${out:-/dev/stdout}" 2> "$errlog"
+        "${runner[@]+"${runner[@]}"}" bash -c "$custom_cmd" > "${out:-/dev/stdout}" 2> "$errlog"
       else
-        "${runner[@]}" "${agent_argv[@]}" < "$prompt" > "${out:-/dev/stdout}" 2> "$errlog"
+        "${runner[@]+"${runner[@]}"}" "${agent_argv[@]}" < "$prompt" > "${out:-/dev/stdout}" 2> "$errlog"
       fi
       rc=$?
     fi
