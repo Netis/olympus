@@ -113,6 +113,47 @@ check("implement allow_network=true drops the deny block", "--disallowed-tools" 
 check("implement allow_network=true still strips tokens", out.startswith("env -u GH_TOKEN"))
 os.unlink(cfg)
 
+# --- 5. built-in codex harness: argv + sandbox per profile --------------------
+with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+    json.dump({"harness": {"kind": "codex", "model": "gpt-5"}}, f)
+    cfg = f.name
+out = dry_run('--profile investigate --prompt /tmp/p --out /tmp/o', config=cfg)
+check("codex investigate starts with 'codex exec'", out.startswith("codex exec") or " codex exec" in out)
+check("codex uses harness.model", "--model gpt-5" in out)
+check("codex read-only profile → --sandbox read-only", "--sandbox read-only" in out)
+check("codex investigate has no --allowed-tools (claude-only flag)", "--allowed-tools" not in out)
+
+out = dry_run('--profile implement --prompt /tmp/p --out /tmp/o', config=cfg)
+check("codex implement → --sandbox workspace-write", "--sandbox workspace-write" in out)
+check("codex implement still strips GitHub tokens", "env -u GH_TOKEN" in out)
+os.unlink(cfg)
+
+# --- 6. harness.proxy: exported for codex, never for claude -------------------
+PROXY = "http://172.16.103.81:8888"
+with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+    json.dump({"harness": {"kind": "codex", "proxy": PROXY}}, f)
+    cfg = f.name
+out = dry_run('--profile investigate --prompt /tmp/p --out /tmp/o', config=cfg)
+check("codex investigate gets HTTPS_PROXY", f"HTTPS_PROXY={PROXY}" in out)
+check("codex investigate gets lowercase https_proxy", f"https_proxy={PROXY}" in out)
+check("codex investigate gets ALL_PROXY", f"ALL_PROXY={PROXY}" in out)
+check("codex proxy wraps the argv in an env prefix", out.startswith("env "))
+
+out = dry_run('--profile implement --prompt /tmp/p --out /tmp/o', config=cfg)
+check("codex implement combines token-strip AND proxy",
+      "env -u GH_TOKEN" in out and f"HTTPS_PROXY={PROXY}" in out)
+os.unlink(cfg)
+
+# claude must NEVER be proxied even if harness.proxy is set (it talks to the
+# internal gateway; proxy is only for non-claude harnesses).
+with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+    json.dump({"harness": {"kind": "claude", "proxy": PROXY}}, f)
+    cfg = f.name
+out = dry_run('--profile investigate --prompt /tmp/p --out /tmp/o', config=cfg)
+check("claude is never proxied (no HTTPS_PROXY)", "HTTPS_PROXY" not in out)
+check("claude with proxy config still has no env prefix", not out.startswith("env "))
+os.unlink(cfg)
+
 print()
 if failures:
     print(f"{len(failures)} check(s) FAILED")
