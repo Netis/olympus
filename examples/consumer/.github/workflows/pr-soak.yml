@@ -24,10 +24,10 @@ permissions:
 
 jobs:
   soak:
-    uses: Netis/olympus/.github/workflows/soak.yml@v0.4.0
+    uses: Netis/olympus/.github/workflows/soak.yml@v0.5.0
     with:
       pr_number: ${{ inputs.pr_number }}
-      olympus_ref: v0.4.0
+      olympus_ref: v0.5.0
       runner_labels: '["self-hosted","my-runner"]'
       # Must exceed .testing.soak_minutes.
       timeout_minutes: 60

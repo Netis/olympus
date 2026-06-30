@@ -18,9 +18,9 @@ permissions:
 
 jobs:
   observe:
-    uses: Netis/olympus/.github/workflows/observe.yml@v0.4.0
+    uses: Netis/olympus/.github/workflows/observe.yml@v0.5.0
     with:
-      olympus_ref: v0.4.0
+      olympus_ref: v0.5.0
       runner_labels: '["self-hosted","my-runner"]'
       dry_run: ${{ github.event.inputs.dry_run == 'true' }}
     secrets: inherit

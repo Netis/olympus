@@ -22,9 +22,9 @@ permissions:
 
 jobs:
   review:
-    uses: Netis/olympus/.github/workflows/review.yml@v0.4.0
+    uses: Netis/olympus/.github/workflows/review.yml@v0.5.0
     with:
-      olympus_ref: v0.4.0
+      olympus_ref: v0.5.0
       runner_labels: '["self-hosted","my-runner"]'
       # Empty string on the workflow_run path (resolved from the run event);
       # the PR number you typed on a manual workflow_dispatch re-review.
