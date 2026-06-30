@@ -58,6 +58,11 @@ on:
       LITELLM_NO_PROXY: { required: false }
       AGENT_GH_TOKEN:   { required: true }
       AUTO_MERGE_TEAM:  { required: false }
+      # codex harness only: its API key + the staging/testing egress proxy it
+      # must use. Ignored by the claude harness. Either set HARNESS_PROXY here or
+      # .harness.proxy in .olympus.json.
+      OPENAI_API_KEY:   { required: false }
+      HARNESS_PROXY:    { required: false }
 
 concurrency:
   group: olympus-review-${{ github.event.workflow_run.pull_requests[0].number || inputs.pr_number }}
@@ -78,6 +83,10 @@ jobs:
       ANTHROPIC_BASE_URL: ${{ secrets.LITELLM_BASE_URL }}
       ANTHROPIC_API_KEY:  ${{ secrets.LITELLM_API_KEY }}
       ANTHROPIC_MODEL:    ${{ inputs.model }}
+      # codex harness: auth + egress proxy. Empty when unset → config.sh keeps
+      # any .harness.proxy from the file (a blank env never overrides it).
+      OPENAI_API_KEY:        ${{ secrets.OPENAI_API_KEY }}
+      OLYMPUS_HARNESS_PROXY: ${{ secrets.HARNESS_PROXY }}
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
     steps:
       - name: no_proxy for the model gateway

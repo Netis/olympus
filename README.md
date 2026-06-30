@@ -15,16 +15,22 @@ issue filed
    │  label: agent:assess (or just open it)
    ▼
 TRIAGE ─ investigates + reproduces ─► warm maintainer reply (in the reporter's language)
+   │       ├─ discuss ─► talk it through with the reporter (each reply re-triages) ─┐
+   │       │◄──────────────────────────────────────────────────────────────────────┘
    │       └─ 5 gates pass ─► label: agent:try
    ▼
 IMPLEMENT (dev agent) ─ branch · code · build+test green ─► DRAFT PR (auto-agent)
    ▼
-CI (yours) ──► REVIEW (bot) ─ structured review ─┬─ APPROVE ─► gated auto-merge
+CI (yours) ──► REVIEW (bot) ─ structured review ─┬─ APPROVE ─┬─ simple  ─► gated auto-merge
+   │                                              │           └─ complex ─► SOAK (testing env)
+   │                                              │                            └─► staging-soaked ─► human merges
    │                                              └─ CHANGES ─► REVISE ─► (loop)
    ▼
 OBSERVE (prod) ─ sustained-failure detection ─► scrubbed, deduped incident issue ─► (back to triage)
 
 GUARD (every PR): leakage / secret-reference / secret-value linters — no LLM
+
+Agent CLI is pluggable: claude (default) · codex (built-in, proxy-aware) · custom.
 ```
 
 ## Mechanism vs. policy

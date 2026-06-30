@@ -1,0 +1,34 @@
+name: self-soak
+
+# olympus dogfooding its OWN staging-soak surface on its OWN PRs, via a local
+# reusable-workflow ref. Dispatched by self-review's auto-merge/post-review step
+# (`gh workflow run self-soak.yml`) when an APPROVED PR is too big for the
+# auto-merge fast path — so to dogfood soak, set OLYMPUS_SOAK_WORKFLOW to
+# `self-soak.yml` on the runner, or accept the default `pr-soak.yml` and rename
+# this file. Requires .testing.enabled + .testing.deploy_cmd in .olympus.json.
+# DORMANT until `SELF_DOGFOOD_ENABLED == 'true'` AND secrets + a self-hosted
+# runner are provisioned (see SELF-DOGFOOD.md).
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: PR number to soak
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  soak:
+    if: ${{ vars.SELF_DOGFOOD_ENABLED == 'true' }}
+    uses: ./.github/workflows/soak.yml
+    with:
+      olympus_repo: ${{ github.repository }}
+      olympus_ref: ${{ github.sha }}
+      pr_number: ${{ inputs.pr_number }}
+      runner_labels: '["self-hosted","olympus"]'
+    secrets: inherit
